@@ -50,17 +50,53 @@ function To-Json { param($Obj) ,$Obj | ConvertTo-Json -Depth 20 }
 function Json-Eq { param($A, $B) (To-Json $A) -eq (To-Json $B) }
 
 # ---------------------------------------------------------------------------
-# A6 -- verify `bash` is Git Bash, not the WSL stub / absent. Hooks invoke bare `bash`.
+# Git Bash resolution + hook hardening -- find the REAL Git Bash (not the WSL stub) and pin the
+# installed plugin hooks to its absolute path, so hook execution never depends on PATH order.
 # ---------------------------------------------------------------------------
+function Resolve-GitBash {
+  $cands = @(
+    "$env:ProgramFiles\Git\bin\bash.exe",
+    "$env:ProgramFiles\Git\usr\bin\bash.exe",
+    "${env:ProgramFiles(x86)}\Git\bin\bash.exe",
+    "$env:LOCALAPPDATA\Programs\Git\bin\bash.exe"
+  )
+  $hit = $cands | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if ($hit) { return $hit }
+  # fall back to a bash on PATH that is NOT the System32 WSL stub
+  $onPath = Get-Command bash -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch '\\System32\\' } | Select-Object -First 1
+  if ($onPath) { return $onPath.Source }
+  return $null
+}
+
 function Assert-GitBash {
-  $bash = Get-Command bash -ErrorAction SilentlyContinue
-  if (-not $bash) {
-    $script:Report.Add("[WARN] 'bash' not found on PATH. The session-start + expand hooks need Git Bash. Install Git for Windows, then re-open Claude Code.")
-    return
+  if (Resolve-GitBash) { return }
+  $script:Report.Add("[WARN] Git Bash not found. Install Git for Windows so the session-start + expand hooks can run.")
+}
+
+# Rewrite the INSTALLED plugin's hooks.json to invoke Git Bash by ABSOLUTE path instead of bare `bash`
+# -- removes the PATH-order dependency (WSL-stub-shadows-Git-Bash). bash is still invoked directly, so
+# hook stdin/behavior is unchanged. NOTE: `claude plugin update` restores the shipped bare-`bash`
+# version, so re-run this installer after any plugin update.
+function Repair-PluginHookPaths {
+  $gb = Resolve-GitBash
+  if (-not $gb) { return }   # Assert-GitBash already warned
+  $pluginsDir = Join-Path $ClaudeDir 'plugins'
+  if (-not (Test-Path $pluginsDir)) { $script:Report.Add("[INFO] plugin not installed yet -- run 'claude plugin install dimitri-claude-kit', then re-run this installer to harden hook paths."); return }
+  $files = Get-ChildItem $pluginsDir -Recurse -File -Filter 'hooks.json' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'dimitri-claude-kit' }
+  $patched = 0
+  foreach ($hf in $files) {
+    $o = Get-Content $hf.FullName -Raw | ConvertFrom-Json
+    $changed = $false
+    foreach ($evt in $o.hooks.PSObject.Properties) {
+      foreach ($grp in @($evt.Value)) {
+        foreach ($h in @($grp.hooks)) {
+          if ($h.command -like 'bash *') { $h.command = '"' + $gb + '"' + $h.command.Substring(4); $changed = $true }
+        }
+      }
+    }
+    if ($changed) { Write-NoBom $hf.FullName (To-Json $o); $patched++ }
   }
-  if ($bash.Source -match '\\System32\\bash\.exe$') {
-    $script:Report.Add("[WARN] 'bash' on PATH resolves to the WSL stub ($($bash.Source)), not Git Bash. Hooks may fail. Put Git\usr\bin (or Git\bin) ahead of System32 on PATH.")
-  }
+  if ($patched -gt 0) { $script:Receipt.hookPathHardened = $gb; $script:Report.Add("[HARDENED] $patched plugin hooks.json now invoke Git Bash by absolute path -- PATH-order-independent.") }
 }
 
 # ---------------------------------------------------------------------------
@@ -256,6 +292,7 @@ function Invoke-Bootstrap {
   Initialize-ContinuityScaffold
   Install-ExternalPlugins
   Install-EodScheduleOptional
+  Repair-PluginHookPaths
 
   # Receipt (B5) -- enables a clean, version-independent v2 uninstall.
   Write-NoBom (Join-Path $ClaudeDir '.kit-install-receipt.json') (To-Json $script:Receipt)

@@ -44,7 +44,8 @@ achieve* across efforts.
 - `session-start-global.sh` (SessionStart) -- the briefing. Resolves its data dir from
   `CLAUDE_CONFIG_DIR` (falls back to `$HOME/.claude`), so it works wherever the plugin lives.
 - `expand-prompt.sh` (UserPromptSubmit) -- expands the `expand` keyword in prompts.
-- Hooks invoke `bash`; **Git Bash must be ahead of the WSL stub on PATH** (the installer checks).
+- Hooks invoke Git Bash; the installer **pins them to Git Bash's absolute path**, so PATH order doesn't
+  matter (it warns only if Git Bash isn't installed; re-run `install.ps1` after a plugin update).
 
 ## Statusline + theme
 `statusline.ps1` renders live usage/context meters. `/theme` is a three-layer system: a **palette**

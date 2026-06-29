@@ -4,8 +4,8 @@ v1 is **Windows-only** (the bootstrap uses PowerShell + Task Scheduler). The plu
 OS-agnostic; a `bootstrap.sh` for macOS/Linux is planned for v2.
 
 ## Prerequisites
-- Claude Code, PowerShell 5.1+, and **Git for Windows** with Git Bash ahead of the WSL stub on PATH
-  (the hooks invoke `bash`; the installer checks and warns if `bash` resolves to `System32\bash.exe`).
+- Claude Code, PowerShell 5.1+, and **Git for Windows** installed. The installer pins the plugin hooks
+  to Git Bash's absolute path, so PATH order no longer matters (it warns only if Git Bash isn't found).
 
 ## Install
 ```
@@ -20,12 +20,15 @@ Then restart Claude Code.
   against *your* usage allowance.
 - `-IncludeStatusLine` -- adopt the kit statusline even if you already have one (backs yours up first).
 - `-Interactive` -- prompt on each `settings.json` scalar conflict instead of keeping your value.
+- `-SkipExternalPlugins` -- don't touch your plugin set (skip the optional-enhancement installs).
 
 **What the installer does (merge-safe):** backs up anything it touches to `~/.claude/.kit-backups/<stamp>/`,
 fills only missing `settings.json` keys (keeps your values on conflict + reports them), never touches an
 existing `CLAUDE.md` (drops `CLAUDE.kit-template.md` beside it), skips an existing statusline unless you
 opt in, creates only missing scaffold dirs, and writes an install receipt
-(`~/.claude/.kit-install-receipt.json`). It prints a summary of everything it skipped or kept.
+(`~/.claude/.kit-install-receipt.json`). It also pins the plugin hooks to Git Bash's absolute path so
+PATH order can't break them (a `claude plugin update` resets this, so re-run the installer afterward).
+It prints a summary of everything it skipped or kept.
 
 ## Update
 1. Plugin half: `claude plugin update`
