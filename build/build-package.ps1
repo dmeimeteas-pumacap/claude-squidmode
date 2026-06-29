@@ -17,9 +17,13 @@
 param(
   [string] $ClaudeDir = (Join-Path $env:USERPROFILE '.claude'),
   [string] $RepoRoot  = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)),
-  [string] $Version   = '0.1.0'
+  [string] $Version   # defaults to the VERSION file (the single source of truth); -Version overrides
 )
 $ErrorActionPreference = 'Stop'
+if (-not $Version) {
+  $vf = Join-Path $RepoRoot 'VERSION'
+  $Version = if (Test-Path $vf) { (Get-Content $vf -Raw).Trim() } else { '0.1.0' }
+}
 
 # --- ALLOWLIST (executable source of truth; mirrors PACKAGE-MANIFEST.md) -------------------
 $ShipSkills = @('catchup','catchupall','change-review','document-process',
