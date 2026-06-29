@@ -1,28 +1,36 @@
 # dimitri-claude-kit
 
 A portable export of a Claude Code continuity + productivity setup: thread-based logging
-(`/log`, `/catchup`), daily orientation (`/morning`, `/eod`, `/goals`), documentation
-generators, and `skill-builder`, plus the supporting statusline, hooks, and settings.
+(`/log`, `/catchup`, `/catchupall`), daily orientation (`/eod`, `/eow`, `/goals`), planning
+helpers (`grill-me`, `scrutinize-plan`), documentation generators, and `skill-builder`, plus the
+supporting statusline, hooks, and settings.
 
-Windows-oriented (the bootstrap is PowerShell).
+Windows-oriented (the bootstrap is PowerShell + Task Scheduler). The plugin half is OS-agnostic; a
+`bootstrap.sh` for macOS/Linux is planned for v2.
 
-> **STATUS: SCAFFOLD.** Structure is in place; merge/scrub logic is stubbed. See *Open decisions*.
+> **STATUS: shipped (v0.1.1).** Merge-safe installer proven by a fixture test (15/15); an
+> allowlist hard-fail leak guard runs on every build. New here? Start with **QUICKSTART.md**.
 
 ## Layout
 
 ```
-claude-kit/
+.
 ├── .claude-plugin/marketplace.json        marketplace listing (this repo IS the marketplace)
 ├── plugins/dimitri-claude-kit/            the plugin (additive, namespaced, safe to install)
 │   ├── .claude-plugin/plugin.json
-│   ├── hooks/hooks.json                   SessionStart + Stop
-│   ├── skills/   commands/   scripts/     populated by build-package.ps1
+│   ├── hooks/hooks.json                   SessionStart (briefing) + UserPromptSubmit (expand)
+│   ├── skills/  commands/  scripts/       14 skills + theme command, synced by build-package.ps1
 ├── bootstrap/                             plugin-uncarriable installs (recipient-side)
 │   ├── install.ps1                        merge-safe, idempotent installer
 │   ├── settings.template.json
-│   └── CLAUDE.template.md
-├── build/build-package.ps1                author-side rebuild (the "patch the export" loop)
-└── PACKAGE-MANIFEST.md                    include / exclude buckets
+│   ├── CLAUDE.template.md
+│   ├── statusline.ps1   themes/   scripts/
+├── build/
+│   ├── build-package.ps1                  author-side rebuild (the "patch the export" loop)
+│   └── test-merge-safety.ps1              B1 no-clobber + idempotency fixture test
+├── VERSION                                single source of truth for the version
+├── QUICKSTART.md  GUIDE.md  INSTALL.md    user docs (+ GUIDE-skills.generated.md)
+└── PACKAGE-MANIFEST.md                    the ship/never-ship allowlist
 ```
 
 ## Two halves, two reasons
@@ -31,47 +39,43 @@ A Claude Code plugin **cannot** carry `statusLine`, user settings (`model`/`them
 `enabledPlugins`/`extraKnownMarketplaces`, OS scheduled tasks, or continuity files. So:
 
 - **Plugin half** — skills/commands/hooks/agents. Additive and namespaced; installing it cannot
-  clobber a recipient's existing config. Updated by `git pull` + `/plugin update`.
+  clobber a recipient's existing config. Updated by `claude plugin update`.
 - **Bootstrap half** — everything above that a plugin can't carry. Writes files the recipient
-  already owns, so it must be **merge-safe and idempotent** (the load-bearing problem).
+  already owns, so it is **merge-safe and idempotent**: backs up anything it touches, fills only
+  missing `settings.json` keys (keeps your value on conflict), never overwrites an existing
+  `CLAUDE.md` or statusline, and writes an install receipt. This is the load-bearing problem, and
+  it is covered by `build/test-merge-safety.ps1`.
 
 ## Install (recipient)
 
-```powershell
-# 1. add the marketplace + install the plugin
+```
 claude plugin marketplace add <this-repo-url>
-claude  # then: /plugin install dimitri-claude-kit@dimitri-claude-kit
-
-# 2. run the bootstrap for the uncarriable bits
-pwsh ./bootstrap/install.ps1            # add -InstallEodSchedule for the daily /eod task
+claude plugin install dimitri-claude-kit
+powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap\install.ps1
 ```
 
-## Patch loop (author — you)
+Then restart Claude Code. Prerequisite: **Git for Windows** (the hooks run under Git Bash; the
+installer pins them to its absolute path, so PATH order doesn't matter). Full options +
+update/uninstall are in **INSTALL.md**; the 60-second version is **QUICKSTART.md**.
 
-This is the "easy to patch as I update my setup" path:
+## Patch loop (author)
+
+The "easy to patch as I update my setup" path. The working branch is **`release`** (versionless,
+the repo default); `main` is reserved for reviewed releases via PR.
 
 ```powershell
 pwsh ./build/build-package.ps1          # re-derive plugin/ + bootstrap/ from live ~/.claude
-git add -A && git commit -m "sync" && git push
+# build runs a hard-fail no-personal-data gate before it finishes; it errors if anything leaks
+git add -A && git commit -m "sync" && git push   # pushes to release (the default branch)
 ```
 
-Recipients then `git pull` + `/plugin update`. The build is idempotent — it regenerates the
-shippable trees from your live `~/.claude` and runs a no-personal-data safety gate before commit.
+`build-package.ps1` reads the version from `VERSION` (bump that file to cut a new version),
+regenerates the shippable trees from your live `~/.claude`, and runs the allowlist
+`Assert-NoPersonalData` gate before completing. Recipients then `claude plugin update` + re-run
+`install.ps1`.
 
-## Open decisions (resolve before promoting out of drafts)
+## Design + decisions
 
-1. **Hook path resolution.** `session-start-global.sh` / `auto-wrap.sh` derive `CLAUDE_DIR` as
-   `$(dirname BASH_SOURCE)/..`. Inside the plugin that points at the plugin root, not `~/.claude`
-   where `threads/` and `session-notes/` live. Either patch the scripts on build to resolve
-   `$HOME/.claude`, **or** ship the hooks via bootstrap into `~/.claude/hooks/` (reverting to the
-   current working arrangement). Also: the Windows command uses bare `bash` — needs Git bash on PATH.
-2. **settings.json merge strategy.** Fill-if-absent for scalars (model/theme/effort), prompt on
-   conflict; statusLine overwrite only if absent; hooks dedupe-and-append. Confirm before wiring
-   `Merge-SettingsJson`.
-3. **External plugins.** Automate `claude plugin marketplace add` for karpathy-skills +
-   code-simplifier, or just document the two commands?
-4. **CLAUDE.md scrub.** Never overwrite an existing one — drop alongside as `CLAUDE.kit-template.md`.
-   The ADHD-section reframe is human-judgement; emit a diff for review rather than auto-stripping.
-5. **`auto-wrap.sh`** is not currently wired in live `settings.json`. Ship it (and wire it) or not?
-6. **Coupled skills.** `maystreet-pull` (exclude) and `test-safety-audit` (exclude or genericize).
-```
+The six original open decisions are all resolved (v1 locked 2026-06-29). Full design rationale,
+the merge-safe invariant, and the resolved decisions live in the author's plan file referenced from
+the build; per-feature behavior is documented in **GUIDE.md**.
