@@ -79,12 +79,30 @@ function Sync-Hooks {
   $destRoot = Stage-Path "$PluginRel/scripts"
   New-Item -ItemType Directory -Path $destRoot -Force | Out-Null
   $oldDeriv = 'CLAUDE_DIR="$(cd "$HOOK_DIR/.." && pwd)"'
-  $newDeriv = 'CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'
+  # D1 (robust): the author's live hook lives at ~/.claude/hooks, so "$HOOK_DIR/.." works there.
+  # Once installed as a PLUGIN the hook lives at ~/.claude/plugins/.../scripts, where "$HOOK_DIR/.."
+  # points at the plugin dir, NOT ~/.claude -- so the thread INDEX is never found. Resolve in order:
+  # explicit CLAUDE_CONFIG_DIR -> derive ~/.claude from the /plugins/ path (foolproof, HOME-independent)
+  # -> $HOME/.claude -> $USERPROFILE/.claude (Windows fallback when HOME is unset).
+  $newDeriv = (@(
+    'if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then'
+    '  CLAUDE_DIR="$CLAUDE_CONFIG_DIR"'
+    'elif [ "$HOOK_DIR" != "${HOOK_DIR%%/plugins/*}" ]; then'
+    '  CLAUDE_DIR="${HOOK_DIR%%/plugins/*}"'
+    'elif [ -n "${HOME:-}" ]; then'
+    '  CLAUDE_DIR="$HOME/.claude"'
+    'else'
+    '  CLAUDE_DIR="${USERPROFILE:-}/.claude"'
+    'fi'
+  ) -join "`n")
   foreach ($h in $ShipHooks) {
     $src = Join-Path $ClaudeDir "hooks/$h"
     if (-not (Test-Path $src)) { throw "Allowlisted hook '$h' not found at $src" }
-    $c = Get-Content $src -Raw
-    $c = $c.Replace($oldDeriv, $newDeriv)   # D1: env-resolve the data dir (literal replace)
+    # Read as UTF-8 (BOM-detected). Get-Content -Raw decoded BOM-less UTF-8 as CP1252, which
+    # double-encoded every em-dash/box-rule into mojibake in the shipped banner -- fixed here.
+    $c = [System.IO.File]::ReadAllText($src)
+    $c = $c.Replace("`r`n", "`n").Replace("`r", "`n")   # force LF so bash never chokes on CR
+    $c = $c.Replace($oldDeriv, $newDeriv)   # D1: robustly resolve the data dir (literal replace)
     if ($c -match [regex]::Escape('$HOOK_DIR/..')) { throw "Hook '$h' still resolves CLAUDE_DIR from BASH_SOURCE -- D1 patch did not apply (source line changed?)" }
     Write-NoBom (Join-Path $destRoot $h) $c
   }
@@ -105,6 +123,26 @@ function Sync-BootstrapAssets {
     $src = Join-Path $RepoRoot "bootstrap/$f"
     if (Test-Path $src) { Copy-Item $src (Stage-Path "bootstrap/$f") -Force }
   }
+
+  # Ship a NEUTRAL theme, not the author's live look. Reset the staged statusline to the
+  # 'default' palette with no pinned overrides, and write the matching stock cc-active.json,
+  # so a first-time recipient sees stock Claude Code dark (not whatever palette the author runs).
+  # /theme then lets them switch + activates the custom theme (settings 'theme' = custom:cc-active).
+  $slStage = Stage-Path 'bootstrap/statusline.ps1'
+  if (Test-Path $slStage) {
+    $sl = [System.IO.File]::ReadAllText($slStage)
+    $sl = $sl.Replace("`r`n", "`n").Replace("`r", "`n")
+    $sl = [regex]::Replace($sl, '(?m)^\$palette\s*=.*$',      "`$palette = 'default'")
+    $sl = [regex]::Replace($sl, '(?m)^\$barOverride\s*=.*$',  "`$barOverride  = ''")
+    $sl = [regex]::Replace($sl, '(?m)^\$barPinned\s*=.*$',    "`$barPinned    = `$false")
+    $sl = [regex]::Replace($sl, '(?m)^\$baseOverride\s*=.*$', "`$baseOverride = ''")
+    $sl = [regex]::Replace($sl, '(?m)^\$basePinned\s*=.*$',   "`$basePinned   = `$false")
+    Write-NoBom $slStage $sl
+    $Report.Add("statusline sanitized to 'default' palette (overrides cleared)")
+  }
+  $defaultTheme = ([ordered]@{ name = 'CC Active (default - stock)'; base = 'dark'; overrides = [ordered]@{} } | ConvertTo-Json -Depth 5)
+  Write-NoBom (Stage-Path 'bootstrap/themes/cc-active.json') $defaultTheme
+
   $Report.Add("bootstrap assets synced")
 }
 

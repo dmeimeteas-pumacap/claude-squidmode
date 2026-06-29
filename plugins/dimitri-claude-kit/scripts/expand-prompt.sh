@@ -1,17 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-# UserPromptSubmit hook â€” `expand` keyword handler.
+# UserPromptSubmit hook — `expand` keyword handler.
 #
 # When the user's prompt is exactly "expand" (case-insensitive, surrounding
 # whitespace allowed), inject an overview of every active thread as
 # additionalContext and let the prompt proceed, so the model renders it as a
 # proper markdown table in normal styling. (Blocking with a `reason` was tried
 # first but the harness shows block messages as unstyled plain text wrapped in
-# yellow "operation blocked by hook" chrome â€” raw pipes, wrong color.)
+# yellow "operation blocked by hook" chrome — raw pipes, wrong color.)
 #
 # Delivery is reliable because this payload is small and is injected at prompt
-# time â€” unlike the original SessionStart instruction, which got persisted to a
+# time — unlike the original SessionStart instruction, which got persisted to a
 # file past the 2 KB preview, so the model never saw it and `expand` did nothing.
 #
 # Any other prompt: exit 0 with no output, leaving the prompt untouched.
@@ -20,7 +20,15 @@ set -euo pipefail
 # session-start-global.sh; this hook is its single owner.
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+  CLAUDE_DIR="$CLAUDE_CONFIG_DIR"
+elif [ "$HOOK_DIR" != "${HOOK_DIR%%/plugins/*}" ]; then
+  CLAUDE_DIR="${HOOK_DIR%%/plugins/*}"
+elif [ -n "${HOME:-}" ]; then
+  CLAUDE_DIR="$HOME/.claude"
+else
+  CLAUDE_DIR="${USERPROFILE:-}/.claude"
+fi
 THREADS_INDEX="$CLAUDE_DIR/threads/INDEX.md"
 
 # --- Cheap keyword gate (runs on EVERY prompt; keep it light) -------------
@@ -85,7 +93,7 @@ if [ ${#_files[@]} -gt 0 ]; then
   ' "${_files[@]}")
 fi
 
-# --- Build the overview table (overview columns only; no Next step â€” that
+# --- Build the overview table (overview columns only; no Next step — that
 # detail is /catchupall's job) -------------------------------------------
 EXPAND_ROWS=""
 ROW_NUM=0
@@ -101,14 +109,14 @@ while IFS= read -r row; do
   slug="${slug//\[/}"; slug="${slug//\]/}"
   short_slug="${slug#[0-9][0-9][0-9][0-9]-[0-9][0-9]-}"
 
-  topic="â€”"
+  topic="—"
   [ -n "${TOPIC_MAP[$slug]:-}" ] && topic="${TOPIC_MAP[$slug]}"
 
   where_md="$where"
-  if [ ${#where_md} -gt 90 ]; then where_md="${where_md:0:90}"; where_md="${where_md% *}â€¦"; fi
+  if [ ${#where_md} -gt 90 ]; then where_md="${where_md:0:90}"; where_md="${where_md% *}…"; fi
   where_md="${where_md//|/\\|}"
   topic_md="$topic"
-  if [ ${#topic_md} -gt 40 ]; then topic_md="${topic_md:0:40}"; topic_md="${topic_md% *}â€¦"; fi
+  if [ ${#topic_md} -gt 40 ]; then topic_md="${topic_md:0:40}"; topic_md="${topic_md% *}…"; fi
   topic_md="${topic_md//|/\\|}"
   case "$pri" in
     high) prio_md="**High**" ;;
@@ -124,7 +132,7 @@ TABLE="| # | Prio | Thread | Topic | Repo | Last | Where I left off |
 ${EXPAND_ROWS%$'\n'}"
 
 # Inject the table as context and let the prompt through; the model renders it.
-CONTEXT="The user's entire message is the \`expand\` keyword. Output the following markdown table as your reply, verbatim â€” render it as a table, do not modify, reorder, restyle, or add commentary around it. It is the overview of all active threads:
+CONTEXT="The user's entire message is the \`expand\` keyword. Output the following markdown table as your reply, verbatim — render it as a table, do not modify, reorder, restyle, or add commentary around it. It is the overview of all active threads:
 
 $TABLE"
 printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' "$(json_escape "$CONTEXT")"

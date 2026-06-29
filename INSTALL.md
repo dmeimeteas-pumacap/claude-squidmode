@@ -6,8 +6,22 @@ OS-agnostic; a `bootstrap.sh` for macOS/Linux is planned for v2.
 > Want the skills without the bootstrap (on a Mac, on Linux, or in Claude.ai/desktop)? That
 > path exists today -- see **LITE.md**. This file covers the full Windows install.
 
+## Step 0: Install Claude Code (skip if the CLI is already set up)
+If you only use Claude Code via the VS Code extension, the CLI itself may not be installed. This kit
+installs into that CLI, so set it up first (Windows):
+
+1. In **PowerShell**: `irm https://claude.ai/install.ps1 | iex`
+   (or `winget install Anthropic.ClaudeCode`, or with Node.js 18+, `npm install -g @anthropic-ai/claude-code`).
+2. Install **Git for Windows** (https://git-scm.com/downloads/win) -- required, the hooks run under Git Bash.
+3. Run `claude` once and finish the browser login (Pro/Max/Team/Enterprise plan required).
+4. **VS Code:** install the **Claude Code** extension from the Marketplace and reload; it uses the CLI
+   from step 1. Running `claude` in the integrated terminal also works.
+5. Verify with `claude --version` and `claude doctor`.
+
+Reference: https://code.claude.com/docs/en/setup
+
 ## Prerequisites
-- Claude Code, PowerShell 5.1+, and **Git for Windows** installed. The installer pins the plugin hooks
+- Claude Code (Step 0), PowerShell 5.1+, and **Git for Windows** installed. The installer pins the plugin hooks
   to Git Bash's absolute path, so PATH order no longer matters (it warns only if Git Bash isn't found).
 
 ## Install

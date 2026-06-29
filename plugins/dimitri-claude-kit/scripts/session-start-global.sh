@@ -1,13 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-# Global session-start hook â€” portable, no project-specific logic.
+# Global session-start hook — portable, no project-specific logic.
 # Emits JSON: systemMessage (thread table, shown in chat at startup) +
 # hookSpecificOutput.additionalContext (full context for Claude).
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+  CLAUDE_DIR="$CLAUDE_CONFIG_DIR"
+elif [ "$HOOK_DIR" != "${HOOK_DIR%%/plugins/*}" ]; then
+  CLAUDE_DIR="${HOOK_DIR%%/plugins/*}"
+elif [ -n "${HOME:-}" ]; then
+  CLAUDE_DIR="$HOME/.claude"
+else
+  CLAUDE_DIR="${USERPROFILE:-}/.claude"
+fi
 NOTE_DIR="$CLAUDE_DIR/session-notes"
 THREADS_INDEX="$CLAUDE_DIR/threads/INDEX.md"
 
@@ -24,7 +32,7 @@ fi
 
 # Morning recap source. We surface the most recent EOD synthesis as a recap above the
 # thread board on EVERY session (not just the first of the day), regardless of how old it
-# is â€” EOD_RECAP_DATE is parsed whenever eod-latest.md exists and the block renders if it
+# is — EOD_RECAP_DATE is parsed whenever eod-latest.md exists and the block renders if it
 # is non-empty. RECAP_IS_FRESH=1 only when that EOD is dated yesterday; it no longer gates
 # the recap banner, but the first-session recovery path and marker write below still use it
 # to decide whether to nudge a /eod regeneration.
@@ -73,7 +81,7 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -f "$PROJECT_HOOK" ]; then
   if grep -q "todo.md" "$PROJECT_HOOK" 2>/dev/null; then PROJECT_EMITS_TODOS=1; fi
 fi
 
-# JSON-escape a string â€” no external tools required
+# JSON-escape a string — no external tools required
 json_escape() {
   local s="$1"
   s="${s//\\/\\\\}"
@@ -127,17 +135,17 @@ wrap_indent() {
 clip_line() {
   local s="$1" w="$2"
   if [ "${#s}" -gt "$w" ]; then
-    s="${s:0:$w}"; s="${s% *}â€¦"
+    s="${s:0:$w}"; s="${s% *}…"
   fi
   REPLY="$s"
 }
 
 # Detect the repo ONCE (was a separate `git rev-parse` here and again for
-# SESSION_REPO below â€” two forks collapsed into one).
+# SESSION_REPO below — two forks collapsed into one).
 IS_REPO=0
 if git -C "$PROJECT_DIR" rev-parse --git-dir &>/dev/null 2>&1; then IS_REPO=1; fi
 
-# Git context (additionalContext only â€” not shown in banner).
+# Git context (additionalContext only — not shown in banner).
 # Skipped when a project session-start hook already emits it (see PROJECT_EMITS_GIT).
 if [ "$PROJECT_EMITS_GIT" != "1" ] && [ "$IS_REPO" = "1" ]; then
   BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -171,7 +179,7 @@ if [ -n "$ACTIVE_ROWS" ]; then
   MAGENTA=$'\033[1;35m'
   YELLOW=$'\033[1;33m'
   CYAN=$'\033[36m'
-  # Slash-command accent blue â€” matches /usage and /theme in statusline.ps1
+  # Slash-command accent blue — matches /usage and /theme in statusline.ps1
   ACCENT=$'\033[38;2;177;185;249m'
   # Dimmer accent + dim text for inline command hints (one level down from ACCENT);
   # used for the catchup pointers and the "expand" keyword on the overflow line.
@@ -204,7 +212,7 @@ if [ -n "$ACTIVE_ROWS" ]; then
     GUT="        "            # 8-col continuation indent, matches "  Next  "
     _cw="${RECAP_COLS:-92}"   # content target width (override via RECAP_COLS)
 
-    RECAP_BLOCK="â”€ ${BOLD}Last recap Â· ${EOD_RECAP_DATE}${_days} â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€${RESET}${NL}${NL}"
+    RECAP_BLOCK="─ ${BOLD}Last recap · ${EOD_RECAP_DATE}${_days} ─────────────────────────${RESET}${NL}${NL}"
 
     # Did: pull the bold thread name and the detail after the em-dash; shorten the
     # name and clip the detail so each project stays on one line. Rendered first
@@ -217,12 +225,12 @@ if [ -n "$ACTIVE_ROWS" ]; then
         _name="${_ln#*\*\*}"; _name="${_name%%\*\**}"
         _name="${_name#dimitri-}"
         clip_line "$_name" 28; _name="$REPLY"
-        _det="${_ln#*â€” }"
+        _det="${_ln#*— }"
         [ "$_det" = "$_ln" ] && _det="${_ln#- }"
         trim "$_det"; _det="$REPLY"
         clip_line "$_det" "$((_cw - ${#_name} - 11))"; _det="$REPLY"
         if [ "$_i" = 1 ]; then _pre="  ${BOLD}Did ${RESET}  "; else _pre="$GUT"; fi
-        RECAP_BLOCK="${RECAP_BLOCK}${_pre}${_name} â€” ${_det}${NL}"
+        RECAP_BLOCK="${RECAP_BLOCK}${_pre}${_name} — ${_det}${NL}"
       done <<< "$RECAP_PROJECTS"
       RECAP_BLOCK="${RECAP_BLOCK}${NL}"
     fi
@@ -264,17 +272,17 @@ if [ -n "$ACTIVE_ROWS" ]; then
   # whitespace and then drops a banner whose remaining text begins with an ANSI escape, so a
   # board starting with "${NL}${NL}${DIM}..." rendered as nothing on cold `startup` (it survived
   # `clear`/`resume`, which were more lenient). The repo moved to the statusline, so both the
-  # recap header and the Active-threads header now lead with a plain "â”€ " rule so whichever
+  # recap header and the Active-threads header now lead with a plain "─ " rule so whichever
   # comes first (recap is optional) still satisfies the printable-lead rule.
   ANSI_BANNER="${RECAP_BLOCK}"
-  ANSI_BANNER="${ANSI_BANNER}â”€ ${BOLD}Active threads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€${RESET}${NL}"
+  ANSI_BANNER="${ANSI_BANNER}─ ${BOLD}Active threads ──────────────────────────────────────────────────${RESET}${NL}"
   ANSI_BANNER="${ANSI_BANNER}  ${DIM}[${RESET}${YELLOW}High${RESET}${DIM}|${RESET}${CYAN}Mid${RESET}${DIM}|Low] | thread-name | topic | repo | date${RESET}${NL}${NL}"
 
   mapfile -t _rows_arr <<< "$ACTIVE_ROWS"
   TOTAL_ROWS=${#_rows_arr[@]}
 
   # Pre-parse EVERY thread file in a SINGLE awk pass (previously one awk fork
-  # per thread â€” the dominant startup cost on Windows, ~90ms/fork). Emits
+  # per thread — the dominant startup cost on Windows, ~90ms/fork). Emits
   # tab-separated records "<slug>\t(topic|next)\t<value>"; FNR==1 resets the
   # per-file state and derives the slug from the filename. Results land in two
   # associative arrays the main loop reads instead of forking awk per thread.
@@ -326,8 +334,8 @@ if [ -n "$ACTIVE_ROWS" ]; then
     short_slug="${slug#[0-9][0-9][0-9][0-9]-[0-9][0-9]-}"
 
     # Topic + first 3 "## Next" items, looked up from the single-pass awk
-    # results (TOPIC_MAP / NEXT_MAP) built above. Empty topic falls back to "â€”".
-    topic="â€”"
+    # results (TOPIC_MAP / NEXT_MAP) built above. Empty topic falls back to "—".
+    topic="—"
     [ -n "${TOPIC_MAP[$slug]:-}" ] && topic="${TOPIC_MAP[$slug]}"
     next_items="${NEXT_MAP[$slug]:-}"
 
@@ -357,10 +365,10 @@ if [ -n "$ACTIVE_ROWS" ]; then
       # Tint "expand" the same accent-blue as the catchup command hints. Reset
       # first so it does NOT inherit the surrounding DIM attribute (that bleed is
       # what made it render off-blue); restore DIM for the trailing prose.
-      OVERFLOW_LINE="... $REMAINING more thread(s) â€” type ${RESET}${ACCENT_DIM}expand${RESET}${DIM} to see all"
+      OVERFLOW_LINE="... $REMAINING more thread(s) — type ${RESET}${ACCENT_DIM}expand${RESET}${DIM} to see all"
     fi
 
-    # Open next items per thread (additionalContext only) â€” all threads
+    # Open next items per thread (additionalContext only) — all threads
     if [ -n "$next_items" ]; then
       NEXT_SECTION="$NEXT_SECTION
 
@@ -374,7 +382,7 @@ $next_items"
   # the ANSI block above. Sits on the overflow line.
   CMD_CATCHUP="${ACCENT_DIM}/catchup${RESET}${TEXT_DIM} <slug>${RESET} ${DIM}-${RESET} ${TEXT_DIM}see more on one thread${RESET}"
   CMD_CATCHUPALL="${ACCENT_DIM}/catchupall${RESET} ${DIM}-${RESET} ${TEXT_DIM}see more on many/all threads${RESET}"
-  CMDS="${CMD_CATCHUP} ${DIM}Â·${RESET} ${CMD_CATCHUPALL}"
+  CMDS="${CMD_CATCHUP} ${DIM}·${RESET} ${CMD_CATCHUPALL}"
   if [ -n "$OVERFLOW_LINE" ]; then
     ANSI_BANNER="${ANSI_BANNER}  ${DIM}${OVERFLOW_LINE}${RESET} ${DIM}---${RESET} ${CMDS}${NL}"
   else
@@ -396,7 +404,7 @@ _Drill into one with \`/catchup <slug>\` (or \`/catchup <n>\`), or see all with 
   # the user. It is intentionally NOT injected here: doing so pushed this
   # SessionStart additionalContext past the harness inline limit, so the whole
   # payload was persisted to a file and the print-the-table instruction landed
-  # past the preview window â€” the model never saw it and `expand` did nothing.
+  # past the preview window — the model never saw it and `expand` did nothing.
   FULL_CONTENT="$FULL_CONTENT
 $THREAD_TABLE
 "
@@ -431,7 +439,7 @@ fi
 # EOD dated yesterday): instruct a /eod regeneration, then a /goals nudge.
 if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ]; then
   FULL_CONTENT="$FULL_CONTENT
-## First session today â€” no recap from yesterday (${YESTERDAY})
+## First session today — no recap from yesterday (${YESTERDAY})
 There is no EOD synthesis dated ${YESTERDAY}. Before addressing the user's first message, run the
 \`eod\` skill for ${YESTERDAY} to generate yesterday's recap and check for uncaptured sessions, then
 summarize it in one short paragraph and remind the user to run \`/goals\` to set today's goals and
@@ -449,7 +457,7 @@ if [ "$FIRST_SESSION_TODAY" = "1" ]; then
   _W_ACCENT=$'\033[38;2;177;185;249m'
   _W_DIM=$'\033[2m'
   _W_NL=$'\n'
-  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}â–¶ Run /goals${_W_RESET}${_W_DIM} to set today's goals and plan for the day${_W_RESET}${_W_NL}"
+  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ Run /goals${_W_RESET}${_W_DIM} to set today's goals and plan for the day${_W_RESET}${_W_NL}"
 fi
 
 # Normal-path marker write: the recap banner was rendered by this hook directly (no
@@ -460,7 +468,7 @@ if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" = "1" ]; then
   printf '%s' "$TODAY" > "$ORIENT_MARKER"
 fi
 
-# Emit JSON â€” systemMessage shows the thread table in chat at session start;
+# Emit JSON — systemMessage shows the thread table in chat at session start;
 # additionalContext injects the full briefing into Claude's context.
 ESCAPED_FULL=$(json_escape "$FULL_CONTENT")
 if [ -n "$BANNER_CONTENT" ]; then

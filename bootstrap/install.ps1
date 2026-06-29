@@ -246,20 +246,37 @@ function Initialize-ContinuityScaffold {
 # ---------------------------------------------------------------------------
 function Install-ExternalPlugins {
   if ($SkipExternalPlugins) { $script:Report.Add("[SKIPPED] external plugins (-SkipExternalPlugins)"); return }
-  $deps = @('andrej-karpathy-skills','code-simplifier')
+  # Each enhancement must have its MARKETPLACE registered before 'plugin install' can resolve it.
+  # (The earlier bug: we ran 'plugin install andrej-karpathy-skills' with no marketplace added, so
+  # it never resolved.) code-simplifier ships from the built-in 'claude-plugins-official' marketplace,
+  # so it needs no add.
+  $deps = @(
+    [pscustomobject]@{ Name = 'andrej-karpathy-skills'; Marketplace = 'forrestchang/andrej-karpathy-skills' },
+    [pscustomobject]@{ Name = 'code-simplifier';        Marketplace = $null }
+  )
+  $manualCmd = {
+    param($d)
+    if ($d.Marketplace) { "claude plugin marketplace add $($d.Marketplace) ; claude plugin install $($d.Name)" }
+    else { "claude plugin install $($d.Name)" }
+  }
   $claude = Get-Command claude -ErrorAction SilentlyContinue
   if (-not $claude) {
-    $cmds = ($deps | ForEach-Object { "claude plugin install $_" }) -join ' ; '
+    $cmds = ($deps | ForEach-Object { & $manualCmd $_ }) -join ' ; '
     $script:Report.Add("[MANUAL] Optional enhancements -- install yourself: $cmds")
     return
   }
   if (-not $NonInteractive) {
-    $ans = Read-Host "Install optional enhancement plugins ($($deps -join ', '))? (Y/n)"
+    $ans = Read-Host "Install optional enhancement plugins ($(($deps.Name) -join ', '))? (Y/n)"
     if ($ans -match '^(n|no)$') { $script:Report.Add("[SKIPPED] external enhancement plugins (declined)."); return }
   }
   foreach ($d in $deps) {
-    try { & claude plugin install $d 2>$null; $script:Receipt.pluginsInstalled += $d }
-    catch { $script:Report.Add("[MANUAL] '$d' install failed -- run: claude plugin install $d") }
+    try {
+      if ($d.Marketplace) { & claude plugin marketplace add $d.Marketplace 2>$null }
+      & claude plugin install $d.Name 2>$null
+      $script:Receipt.pluginsInstalled += $d.Name
+    } catch {
+      $script:Report.Add("[MANUAL] '$($d.Name)' install failed -- run: $(& $manualCmd $d)")
+    }
   }
 }
 

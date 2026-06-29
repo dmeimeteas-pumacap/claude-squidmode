@@ -42,7 +42,7 @@ function Glyph([double]$pct) {
 # percentage maps continuously across them (Windows Terminal truecolor). All
 # ramps run "calm" at low usage to "intense/deep" at high usage, so the low end
 # is the relaxed color and the high end carries the warning.
-$palette = 'aurora'
+$palette = 'default'
 
 # --- Theme layers -----------------------------------------------------------
 # A palette is the master selection: it drives the statusline gradient AND, via
@@ -51,10 +51,10 @@ $palette = 'aurora'
 # Empty override => that layer follows the palette. A *pinned* override survives
 # a palette switch; an unpinned one is cleared the next time /theme <palette>
 # runs (palettes reset everything unless pinned or saved as a new palette).
-$barOverride  = ''          # explicit prompt-bar hex ('' = derive from palette's mid stop)
-$barPinned    = $false      # $true keeps $barOverride across palette switches
-$baseOverride = ''          # explicit CC base theme ('' = use the palette's base)
-$basePinned   = $false      # $true keeps $baseOverride across palette switches
+$barOverride  = ''
+$barPinned    = $false
+$baseOverride = ''
+$basePinned   = $false
 
 # Per-palette base theme. Defaults to 'dark' for any palette not listed here;
 # all current ramps are tuned for dark backgrounds.
@@ -224,7 +224,8 @@ function EffectiveBase { if ($baseOverride) { $baseOverride } else { PaletteBase
 # plus any overrides, then exit. settings.json points "theme" at "custom:cc-active"
 # permanently, so this file is the only thing that changes on a theme switch.
 if ($Apply) {
-  $dir = Join-Path $env:USERPROFILE '.claude\themes'
+  $base = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }
+  $dir = Join-Path $base 'themes'
   if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
   $themePath = Join-Path $dir 'cc-active.json'
   # Write BOM-free UTF-8: Windows PowerShell 5.1's Set-Content -Encoding utf8

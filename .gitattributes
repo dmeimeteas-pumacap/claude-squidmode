@@ -1,0 +1,3 @@
+# Shell hooks MUST stay LF -- a CRLF checkout (core.autocrlf=true on Windows) makes bash
+# choke on the trailing CR ($'\r'), which silently breaks the SessionStart/expand hooks.
+*.sh text eol=lf

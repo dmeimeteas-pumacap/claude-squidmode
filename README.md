@@ -8,7 +8,7 @@ supporting statusline, hooks, and settings.
 Windows-oriented (the bootstrap is PowerShell + Task Scheduler). The plugin half is OS-agnostic; a
 `bootstrap.sh` for macOS/Linux is planned for v2.
 
-> **STATUS: shipped (v0.1.2).** Merge-safe installer proven by a fixture test (15/15); an
+> **STATUS: shipped (v0.1.3).** Merge-safe installer proven by a fixture test (15/15); an
 > allowlist hard-fail leak guard runs on every build. New here? Start with **QUICKSTART.md**.
 > Just want the skills without the terminal setup (incl. macOS/Claude.ai)? See **LITE.md**.
 
