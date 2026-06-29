@@ -1,0 +1,41 @@
+# Package manifest -- ALLOWLIST (what ships; nothing else does)
+
+Source of truth for `build/build-package.ps1`. **Allowlist model (post-critique B3):** the build copies
+ONLY files enumerated here. `Assert-NoPersonalData` is defense-in-depth on top and HARD-FAILS the build
+on any hit. The executable allowlist lives in `build/build-package.ps1` (`$Allowlist`); this file is the
+human-readable mirror -- keep them in sync.
+
+## Plugin bucket (additive, namespaced, auto-discovered at plugin root)
+- **Skills** (`skills/<name>/SKILL.md` + any sub-files): catchup, catchupall, change-review,
+  document-process, document-section, eod, eow, goals, grill-me, log, logall,
+  skill-builder, checkout, scrutinize-plan
+- **Commands** (`commands/*.md`): theme.md
+- **Hooks** (`hooks/hooks.json` -> `scripts/`): session-start-global.sh, expand-prompt.sh
+  - hook scripts are patched on sync to resolve `CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"` (D1).
+
+## Bootstrap bucket (installed by `bootstrap/install.ps1`)
+- statusline.ps1 + themes/cc-active.json
+- settings.template.json (model, theme, effortLevel, autoUpdatesChannel; `_kitVersion` stamped at install)
+- CLAUDE.template.md (genericized)
+- scripts/setup-eod-schedule.ps1 + run-eod.ps1 (optional, Windows, opt-in)
+- VERSION (KIT_VERSION string, written by build)
+
+## Top-level docs
+QUICKSTART.md, GUIDE.md, INSTALL.md, README.md (author-facing)
+
+## EXCLUDED skills (deliberately NOT shipped in v1)
+- maystreet-pull -- TheSquid/BLPAPI/MayStreet-specific
+- test-safety-audit -- coupled to a TheSquid ledger path
+- today -- coupled to the deferred accountability subsystem
+- document-overall -- the system-overview skill is inherently tuned to YOUR system (hardcodes specific
+  architecture/OneNote/DockerHub references); recipients build their own overview. Revisit if genericized.
+- (morning is retired; not present)
+
+## NEVER ship (personal / runtime state) -- enforced by Assert-NoPersonalData hard-fail
+- `.credentials.json`, `.last-*`, `remote-settings.json`, `policy-limits.json`, `mcp-needs-auth-cache.json`
+- `settings.local.json`, `settings.json` (live), `.kit-backups/`, `.kit-install-receipt.json`
+- `daemon/`, `daemon.log`, `sessions/`, `projects/`, `history.jsonl`, `shell-snapshots/`, `jobs/`
+- live content of `threads/` `session-notes/` `memory/` `goals/`
+- `accountability/` (deferred subsystem), `plans/`, `drafts/`, `backups/`, `cache/`, `downloads/`,
+  `paste-cache/`, `file-history/`, `stats-cache.json`, `.obsidian/`
+- any file matching the personal-data scan (client names, tickers, absolute user paths) -- HARD FAIL.

@@ -1,0 +1,27 @@
+{
+  "description": "Continuity hooks: session-start thread briefing + expand-keyword prompt expansion.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start-global.sh\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/expand-prompt.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,272 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  Recipient-side bootstrap for dimitri-claude-kit. Installs what a Claude Code plugin CANNOT carry:
+  statusLine, user settings (model/theme/effortLevel), external-plugin registration, the
+  continuity-file scaffold, and (optionally) the scheduled-/eod task.
+
+.DESCRIPTION
+  MERGE-SAFE by invariant: back up first -> add-or-merge -> never overwrite user-owned content ->
+  reversible. Idempotent: re-running converges, never duplicates or clobbers. Writes an install
+  receipt (~/.claude/.kit-install-receipt.json) recording every addition so a future uninstall is
+  clean and version-independent (backup restores overwrites; receipt reverses additions).
+
+.NOTES
+  v1 Windows-only. Pre-existing files are restorable from .kit-backups/. Uninstall command is v2.
+#>
+
+[CmdletBinding(SupportsShouldProcess)]
+param(
+  # A7: resolve the data dir the SAME way the hooks do, so both halves agree.
+  [string] $ClaudeDir = $(if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.claude' }),
+  [switch] $InstallEodSchedule,   # opt-in, Windows-only
+  [switch] $IncludeStatusLine,    # opt-in: adopt the kit statusline even if recipient has one (backs theirs up)
+  [switch] $Interactive,          # prompt on settings scalar conflicts instead of keep-and-report
+  [switch] $SkipExternalPlugins,  # don't touch the recipient's plugin set (used by tests + plugin-self-managers)
+  [switch] $NonInteractive
+)
+
+$ErrorActionPreference = 'Stop'
+$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$PkgRoot    = Split-Path -Parent $ScriptRoot   # claude-kit repo root
+$Stamp      = Get-Date -Format 'yyyyMMdd-HHmmss'
+$BackupDir  = Join-Path $ClaudeDir ".kit-backups/$Stamp"
+$KitVersion = if (Test-Path (Join-Path $PkgRoot 'VERSION')) { (Get-Content (Join-Path $PkgRoot 'VERSION') -Raw).Trim() } else { '0.0.0-dev' }
+
+# Accumulators for the end-of-run summary and the install receipt (B5).
+$script:Report  = New-Object System.Collections.Generic.List[string]
+$script:Receipt = [ordered]@{
+  kitVersion = $KitVersion; installedAt = $Stamp; claudeDir = $ClaudeDir
+  backupDir = $null; filesOverwritten = @(); settingsKeysAdded = @()
+  settingsConflictsKept = @(); arraysAppended = @(); scaffoldDirsCreated = @()
+  tasksRegistered = @(); pluginsInstalled = @(); statusLine = 'untouched'; claudeMd = 'untouched'
+}
+
+# Write UTF-8 WITHOUT BOM -- Claude Code's JSON parser silently ignores BOM'd files (known gotcha).
+function Write-NoBom { param([string] $Path, [string] $Text)
+  [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
+function To-Json { param($Obj) ,$Obj | ConvertTo-Json -Depth 20 }
+function Json-Eq { param($A, $B) (To-Json $A) -eq (To-Json $B) }
+
+# ---------------------------------------------------------------------------
+# A6 -- verify `bash` is Git Bash, not the WSL stub / absent. Hooks invoke bare `bash`.
+# ---------------------------------------------------------------------------
+function Assert-GitBash {
+  $bash = Get-Command bash -ErrorAction SilentlyContinue
+  if (-not $bash) {
+    $script:Report.Add("[WARN] 'bash' not found on PATH. The session-start + expand hooks need Git Bash. Install Git for Windows, then re-open Claude Code.")
+    return
+  }
+  if ($bash.Source -match '\\System32\\bash\.exe$') {
+    $script:Report.Add("[WARN] 'bash' on PATH resolves to the WSL stub ($($bash.Source)), not Git Bash. Hooks may fail. Put Git\usr\bin (or Git\bin) ahead of System32 on PATH.")
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Backup -- always before any write. Timestamped, never overwrites a prior backup.
+# ---------------------------------------------------------------------------
+function Backup-One { param([string] $Path)
+  if (-not (Test-Path $Path)) { return }
+  if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+  $rel = $Path.Substring($ClaudeDir.Length).TrimStart('\','/')
+  $dest = Join-Path $BackupDir $rel
+  New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
+  Copy-Item -Path $Path -Destination $dest -Recurse -Force
+  $script:Receipt.backupDir = $BackupDir
+  $script:Receipt.filesOverwritten += $rel
+}
+
+# ---------------------------------------------------------------------------
+# settings.json -- MERGE, never replace. Only writes when something actually changes
+# (a no-op run never rewrites the recipient's file -> no formatting clobber).
+# NOTE: settings.json is tool-managed JSON (no comments), so ConvertTo-Json normalization on a
+# real change is benign; the backup is the safety net regardless.
+# ---------------------------------------------------------------------------
+function Merge-SettingsJson { param([string] $TemplatePath, [string] $TargetPath)
+  $tmplText = (Get-Content $TemplatePath -Raw) -replace '__CLAUDE_DIR__', ($ClaudeDir -replace '\\','\\')
+  $tmpl = $tmplText | ConvertFrom-Json
+  $exists = Test-Path $TargetPath
+  $cur = if ($exists) { (Get-Content $TargetPath -Raw | ConvertFrom-Json) } else { [pscustomobject]@{} }
+  $changed = $false
+
+  foreach ($p in $tmpl.PSObject.Properties) {
+    $key = $p.Name
+    if ($key -like '//*') { continue }         # template doc-comment keys never merge into the recipient
+    if ($key -eq 'statusLine') { continue }   # A8: statusline handled atomically elsewhere
+    $has = $cur.PSObject.Properties.Name -contains $key
+
+    if ($key -in @('hooks','permissions')) {
+      # deep-merge object-of-arrays; append only elements not already present (canonical deep-eq).
+      if (-not $has) { $cur | Add-Member -NotePropertyName $key -NotePropertyValue $p.Value; $changed = $true; $script:Receipt.settingsKeysAdded += $key; continue }
+      foreach ($sub in $p.Value.PSObject.Properties) {
+        $curSub = $cur.$key
+        if ($curSub.PSObject.Properties.Name -notcontains $sub.Name) {
+          $curSub | Add-Member -NotePropertyName $sub.Name -NotePropertyValue $sub.Value; $changed = $true
+          $script:Receipt.arraysAppended += "$key.$($sub.Name)"
+        } else {
+          foreach ($item in @($sub.Value)) {
+            $present = @($curSub.($sub.Name)) | Where-Object { Json-Eq $_ $item }
+            if (-not $present) { $curSub.($sub.Name) += $item; $changed = $true; $script:Receipt.arraysAppended += "$key.$($sub.Name)" }
+          }
+        }
+      }
+      continue
+    }
+
+    # scalar prefs
+    if (-not $has) {
+      $cur | Add-Member -NotePropertyName $key -NotePropertyValue $p.Value; $changed = $true
+      $script:Receipt.settingsKeysAdded += $key
+    } elseif (-not (Json-Eq $cur.$key $p.Value)) {
+      if ($Interactive -and -not $NonInteractive) {
+        $ans = Read-Host "settings.json '$key': yours='$($cur.$key)' kit='$($p.Value)'. Overwrite with kit value? (y/N)"
+        if ($ans -match '^(y|yes)$') { $cur.$key = $p.Value; $changed = $true; $script:Receipt.settingsKeysAdded += "$key (overwritten on confirm)" }
+        else { $script:Receipt.settingsConflictsKept += $key; $script:Report.Add("[KEPT] settings.json '$key' = your value '$($cur.$key)' (kit wanted '$($p.Value)').") }
+      } else {
+        $script:Receipt.settingsConflictsKept += $key
+        $script:Report.Add("[KEPT] settings.json '$key' = your value '$($cur.$key)' (kit wanted '$($p.Value)'; re-run with -Interactive to choose).")
+      }
+    }
+  }
+
+  # KIT_VERSION stamp (B4) so the session-start hook can detect version skew.
+  if (($cur.PSObject.Properties.Name -notcontains '_kitVersion') -or ($cur._kitVersion -ne $KitVersion)) {
+    if ($cur.PSObject.Properties.Name -contains '_kitVersion') { $cur._kitVersion = $KitVersion } else { $cur | Add-Member -NotePropertyName '_kitVersion' -NotePropertyValue $KitVersion }
+    $changed = $true
+  }
+
+  if ($changed) {
+    if ($exists) { Backup-One $TargetPath }
+    Write-NoBom $TargetPath (To-Json $cur)
+    $script:Report.Add("[MERGED] settings.json updated (backup in .kit-backups/$Stamp/).")
+  }
+}
+
+# ---------------------------------------------------------------------------
+# CLAUDE.md -- NEVER overwrite an existing one.
+# ---------------------------------------------------------------------------
+function Install-ClaudeTemplate { param([string] $TemplatePath, [string] $TargetPath)
+  if (Test-Path $TargetPath) {
+    $alt = Join-Path $ClaudeDir 'CLAUDE.kit-template.md'
+    Copy-Item $TemplatePath $alt -Force
+    $script:Receipt.claudeMd = 'left intact; template dropped as CLAUDE.kit-template.md'
+    $script:Report.Add("[SKIPPED] CLAUDE.md left intact. Kit template dropped at CLAUDE.kit-template.md -- merge the behavioral sections by hand if you want them.")
+  } else {
+    Copy-Item $TemplatePath $TargetPath -Force
+    $script:Receipt.claudeMd = 'installed (was absent)'
+    $script:Report.Add("[INSTALLED] CLAUDE.md (none existed).")
+  }
+}
+
+# ---------------------------------------------------------------------------
+# statusLine -- A8: one atomic decision over the FILE (statusline.ps1) + the settings 'statusLine' key.
+# ---------------------------------------------------------------------------
+function Install-StatusLine { param([string] $SettingsTarget)
+  $slPath = Join-Path $ClaudeDir 'statusline.ps1'
+  $settings = if (Test-Path $SettingsTarget) { Get-Content $SettingsTarget -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
+  $hasFile = Test-Path $slPath
+  $hasKey  = $settings.PSObject.Properties.Name -contains 'statusLine'
+
+  if (($hasFile -or $hasKey) -and -not $IncludeStatusLine) {
+    $script:Receipt.statusLine = 'skipped (existing detected)'
+    $script:Report.Add("[SKIPPED] statusline left as-is (existing detected). Re-run with -IncludeStatusLine to adopt the kit's (backs yours up first).")
+    return
+  }
+  if (($hasFile -or $hasKey) -and $IncludeStatusLine) {
+    if ($hasFile) { Backup-One $slPath }
+    if ($hasKey)  { Backup-One $SettingsTarget }
+  }
+  Copy-Item (Join-Path $PkgRoot 'bootstrap/statusline.ps1') $slPath -Force
+  $themesDir = Join-Path $ClaudeDir 'themes'; New-Item -ItemType Directory -Path $themesDir -Force | Out-Null
+  Copy-Item (Join-Path $PkgRoot 'bootstrap/themes/cc-active.json') (Join-Path $themesDir 'cc-active.json') -Force
+  # wire the settings key (atomic with the file)
+  $cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$slPath`""
+  $sl = [pscustomobject]@{ type = 'command'; command = $cmd; padding = 0 }
+  if ($hasKey) { $settings.statusLine = $sl } else { $settings | Add-Member -NotePropertyName statusLine -NotePropertyValue $sl }
+  Write-NoBom $SettingsTarget (To-Json $settings)
+  $script:Receipt.statusLine = 'adopted'
+  $script:Report.Add("[INSTALLED] statusline adopted + wired.")
+}
+
+# ---------------------------------------------------------------------------
+# Continuity scaffold -- empty dirs only, never seed personal content.
+# ---------------------------------------------------------------------------
+function Initialize-ContinuityScaffold {
+  $dirs = 'threads/active','threads/done','memory','session-notes/auto','goals/active','goals/done'
+  foreach ($d in $dirs) {
+    $full = Join-Path $ClaudeDir $d
+    if (-not (Test-Path $full)) { New-Item -ItemType Directory -Path $full -Force | Out-Null; $script:Receipt.scaffoldDirsCreated += $d }
+  }
+  $idx = Join-Path $ClaudeDir 'threads/INDEX.md'
+  if (-not (Test-Path $idx)) { Write-NoBom $idx "# Threads`n_Updated by /log._`n`n## Active`n`n## Paused`n`n## Recently done (last 30 days)`n" }
+  $mem = Join-Path $ClaudeDir 'memory/MEMORY.md'
+  if (-not (Test-Path $mem)) { Write-NoBom $mem "# Memory Index`n" }
+  if ($script:Receipt.scaffoldDirsCreated.Count) { $script:Report.Add("[CREATED] continuity scaffold: $($script:Receipt.scaffoldDirsCreated -join ', ').") }
+}
+
+# ---------------------------------------------------------------------------
+# External plugin deps (optional enhancements; core skills do NOT hard-depend).
+# ---------------------------------------------------------------------------
+function Install-ExternalPlugins {
+  if ($SkipExternalPlugins) { $script:Report.Add("[SKIPPED] external plugins (-SkipExternalPlugins)"); return }
+  $deps = @('andrej-karpathy-skills','code-simplifier')
+  $claude = Get-Command claude -ErrorAction SilentlyContinue
+  if (-not $claude) {
+    $cmds = ($deps | ForEach-Object { "claude plugin install $_" }) -join ' ; '
+    $script:Report.Add("[MANUAL] Optional enhancements -- install yourself: $cmds")
+    return
+  }
+  if (-not $NonInteractive) {
+    $ans = Read-Host "Install optional enhancement plugins ($($deps -join ', '))? (Y/n)"
+    if ($ans -match '^(n|no)$') { $script:Report.Add("[SKIPPED] external enhancement plugins (declined)."); return }
+  }
+  foreach ($d in $deps) {
+    try { & claude plugin install $d 2>$null; $script:Receipt.pluginsInstalled += $d }
+    catch { $script:Report.Add("[MANUAL] '$d' install failed -- run: claude plugin install $d") }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Optional: scheduled /eod (Windows-only, opt-in). Runs Claude ~twice daily against YOUR usage.
+# ---------------------------------------------------------------------------
+function Install-EodScheduleOptional {
+  if (-not $InstallEodSchedule) { return }
+  $setup = Join-Path $ClaudeDir 'scripts/setup-eod-schedule.ps1'
+  if (-not (Test-Path $setup)) { Copy-Item (Join-Path $PkgRoot 'bootstrap/scripts/setup-eod-schedule.ps1') $setup -Force }
+  & $setup   # idempotent; registers ClaudeEOD-Afternoon/Evening only if absent
+  $script:Receipt.tasksRegistered += @('ClaudeEOD-Afternoon','ClaudeEOD-Evening')
+  $script:Report.Add("[INSTALLED] scheduled /eod (runs Claude ~2x/day against your usage; remove via schtasks /delete /tn ClaudeEOD-*).")
+}
+
+# ---------------------------------------------------------------------------
+# Orchestration.
+# ---------------------------------------------------------------------------
+function Invoke-Bootstrap {
+  Write-Host "== dimitri-claude-kit bootstrap (v$KitVersion) ->  $ClaudeDir =="
+  $settingsTarget = Join-Path $ClaudeDir 'settings.json'
+  $tmplSettings   = Join-Path $PkgRoot 'bootstrap/settings.template.json'
+  $tmplClaude     = Join-Path $PkgRoot 'bootstrap/CLAUDE.template.md'
+  $claudeTarget   = Join-Path $ClaudeDir 'CLAUDE.md'
+
+  Assert-GitBash
+  Install-StatusLine -SettingsTarget $settingsTarget   # before Merge: settles the statusLine key
+  Merge-SettingsJson -TemplatePath $tmplSettings -TargetPath $settingsTarget
+  Install-ClaudeTemplate -TemplatePath $tmplClaude -TargetPath $claudeTarget
+  Initialize-ContinuityScaffold
+  Install-ExternalPlugins
+  Install-EodScheduleOptional
+
+  # Receipt (B5) -- enables a clean, version-independent v2 uninstall.
+  Write-NoBom (Join-Path $ClaudeDir '.kit-install-receipt.json') (To-Json $script:Receipt)
+
+  Write-Host "`n-- install summary -------------------------------------------------"
+  if ($script:Report.Count -eq 0) { Write-Host "  (nothing to change -- already up to date)" }
+  else { $script:Report | ForEach-Object { Write-Host "  $_" } }
+  Write-Host "  Backup (overwrites only): $(if ($script:Receipt.backupDir) { $script:Receipt.backupDir } else { '(none needed)' })"
+  Write-Host "  Receipt: $ClaudeDir\.kit-install-receipt.json"
+  Write-Host "--------------------------------------------------------------------"
+  Write-Host "Done. Restart Claude Code so the plugin hooks + statusline load."
+}
+
+Invoke-Bootstrap

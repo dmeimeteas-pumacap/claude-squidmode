@@ -1,0 +1,23 @@
+{
+    "name":  "CC Active (aurora)",
+    "base":  "dark",
+    "overrides":  {
+                      "promptBorder":  "#00c8b4",
+                      "promptBorderShimmer":  "#40d6c7",
+                      "claude":  "#00c8b4",
+                      "claudeShimmer":  "#40d6c7",
+                      "suggestion":  "#b4ffa0",
+                      "inactive":  "#97b98e",
+                      "inactiveShimmer":  "#b1caaa",
+                      "bashBorder":  "#281478",
+                      "rate_limit_fill":  "#00c8b4",
+                      "rate_limit_empty":  "#005048",
+                      "planMode":  "#7e72ae",
+                      "autoAccept":  "#b4ffa0",
+                      "warning":  "#bfb82d",
+                      "warningShimmer":  "#cfca62",
+                      "permission":  "#5e4f9a",
+                      "permissionShimmer":  "#897eb5",
+                      "subtle":  "#23655e"
+                  }
+}

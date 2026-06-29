@@ -1,0 +1,18 @@
+{
+  "//": "TEMPLATE — install.ps1 merges these keys into the recipient's ~/.claude/settings.json.",
+  "//paths": "__CLAUDE_DIR__ is rewritten by install.ps1 to the recipient's actual ~/.claude path.",
+  "//merge": "DECISION OPEN (README #2): merge-vs-prompt per key. These are the keys we touch.",
+
+  "model": "opus[1m]",
+  "effortLevel": "medium",
+  "autoUpdatesChannel": "latest",
+  "theme": "custom:cc-active",
+
+  "statusLine": {
+    "type": "command",
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"__CLAUDE_DIR__\\statusline.ps1\""
+  },
+
+  "//hooks": "Only present if the SessionStart/Stop hooks ship via bootstrap instead of the plugin (README #1). If the plugin carries them, omit this block entirely.",
+  "//external-plugins": "enabledPlugins + extraKnownMarketplaces (karpathy-skills, code-simplifier) are NOT plugin-contributable. install.ps1 handles them via /plugin marketplace add — DECISION OPEN (README #3): automate vs document."
+}
