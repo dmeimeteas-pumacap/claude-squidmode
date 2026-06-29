@@ -37,7 +37,7 @@ $BootstrapAssets = @(
   @{ src='scripts/setup-eod-schedule.ps1'; dst='scripts/setup-eod-schedule.ps1' },
   @{ src='scripts/run-eod.ps1';            dst='scripts/run-eod.ps1' }
 )
-$ShipDocs  = @('QUICKSTART.md','GUIDE.md','INSTALL.md','README.md','PACKAGE-MANIFEST.md')
+$ShipDocs  = @('QUICKSTART.md','GUIDE.md','INSTALL.md','LITE.md','README.md','PACKAGE-MANIFEST.md')
 $PluginRel = 'plugins/dimitri-claude-kit'
 
 # Personal-data leak markers (specific, low false-positive). Any hit HARD-FAILS the build.

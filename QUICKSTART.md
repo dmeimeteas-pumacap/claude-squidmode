@@ -3,6 +3,9 @@
 A portable continuity + planning setup for Claude Code: persistent thread/goal tracking, a
 session-start briefing, daily wrap-ups, planning helpers, and a usage statusline.
 
+> **Just want the skills, no terminal setup?** On macOS/Linux, or in Claude.ai/desktop, see
+> **LITE.md** for the OS-agnostic skills-only path (no PowerShell bootstrap).
+
 ## Install in ~60 seconds (Windows)
 Prerequisite: **Git for Windows** (the hooks run under Git Bash) + Claude Code.
 ```

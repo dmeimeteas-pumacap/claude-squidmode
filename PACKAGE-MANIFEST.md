@@ -21,7 +21,7 @@ human-readable mirror -- keep them in sync.
 - VERSION (KIT_VERSION string, written by build)
 
 ## Top-level docs
-QUICKSTART.md, GUIDE.md, INSTALL.md, README.md (author-facing)
+QUICKSTART.md, GUIDE.md, INSTALL.md, LITE.md, README.md (author-facing)
 
 ## EXCLUDED skills (deliberately NOT shipped in v1)
 - maystreet-pull -- TheSquid/BLPAPI/MayStreet-specific

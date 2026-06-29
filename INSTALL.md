@@ -3,6 +3,9 @@
 v1 is **Windows-only** (the bootstrap uses PowerShell + Task Scheduler). The plugin half is
 OS-agnostic; a `bootstrap.sh` for macOS/Linux is planned for v2.
 
+> Want the skills without the bootstrap (on a Mac, on Linux, or in Claude.ai/desktop)? That
+> path exists today -- see **LITE.md**. This file covers the full Windows install.
+
 ## Prerequisites
 - Claude Code, PowerShell 5.1+, and **Git for Windows** installed. The installer pins the plugin hooks
   to Git Bash's absolute path, so PATH order no longer matters (it warns only if Git Bash isn't found).

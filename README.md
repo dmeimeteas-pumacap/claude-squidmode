@@ -8,8 +8,9 @@ supporting statusline, hooks, and settings.
 Windows-oriented (the bootstrap is PowerShell + Task Scheduler). The plugin half is OS-agnostic; a
 `bootstrap.sh` for macOS/Linux is planned for v2.
 
-> **STATUS: shipped (v0.1.1).** Merge-safe installer proven by a fixture test (15/15); an
+> **STATUS: shipped (v0.1.2).** Merge-safe installer proven by a fixture test (15/15); an
 > allowlist hard-fail leak guard runs on every build. New here? Start with **QUICKSTART.md**.
+> Just want the skills without the terminal setup (incl. macOS/Claude.ai)? See **LITE.md**.
 
 ## Layout
 
@@ -29,7 +30,7 @@ Windows-oriented (the bootstrap is PowerShell + Task Scheduler). The plugin half
 │   ├── build-package.ps1                  author-side rebuild (the "patch the export" loop)
 │   └── test-merge-safety.ps1              B1 no-clobber + idempotency fixture test
 ├── VERSION                                single source of truth for the version
-├── QUICKSTART.md  GUIDE.md  INSTALL.md    user docs (+ GUIDE-skills.generated.md)
+├── QUICKSTART.md  GUIDE.md  INSTALL.md  LITE.md   user docs (+ GUIDE-skills.generated.md)
 └── PACKAGE-MANIFEST.md                    the ship/never-ship allowlist
 ```
 
@@ -57,6 +58,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap\install.ps1
 Then restart Claude Code. Prerequisite: **Git for Windows** (the hooks run under Git Bash; the
 installer pins them to its absolute path, so PATH order doesn't matter). Full options +
 update/uninstall are in **INSTALL.md**; the 60-second version is **QUICKSTART.md**.
+
+**Skills only, no bootstrap (OS-agnostic):** to carry just the skills + preferences without the
+Windows install -- on a Mac, on Linux, or into Claude.ai/desktop -- see **LITE.md**. It covers
+plugin-only Claude Code (any OS) and the portable-subset path for plain Claude.ai.
 
 ## Patch loop (author)
 
