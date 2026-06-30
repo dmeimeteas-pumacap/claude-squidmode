@@ -1,3 +1,7 @@
 # Shell hooks MUST stay LF -- a CRLF checkout (core.autocrlf=true on Windows) makes bash
 # choke on the trailing CR ($'\r'), which silently breaks the SessionStart/expand hooks.
 *.sh text eol=lf
+
+# The Git Bash hook wrapper MUST check out CRLF regardless of the recipient's autocrlf setting --
+# cmd.exe can mis-parse an LF-only batch file. eol=crlf guarantees a correct checkout everywhere.
+*.cmd text eol=crlf
