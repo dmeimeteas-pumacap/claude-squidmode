@@ -47,10 +47,10 @@ Check "version stamped (_kitVersion)"        ($null -ne $s._kitVersion)
 Check "no template comment-keys leaked"      ($s.PSObject.Properties.Name -notcontains '//')
 # auto-update object-of-objects keys: add-if-absent for the kit's entry, preserve the recipient's.
 Check "their marketplace preserved"          ($null -ne $s.extraKnownMarketplaces.'their-mp')
-Check "kit marketplace added (add-if-absent)" ($null -ne $s.extraKnownMarketplaces.'dimitri-claude-kit')
-Check "kit marketplace autoUpdate true"      ($s.extraKnownMarketplaces.'dimitri-claude-kit'.autoUpdate -eq $true)
+Check "kit marketplace added (add-if-absent)" ($null -ne $s.extraKnownMarketplaces.'claude-squidmode')
+Check "kit marketplace autoUpdate true"      ($s.extraKnownMarketplaces.'claude-squidmode'.autoUpdate -eq $true)
 Check "their enabledPlugin preserved"        ($s.enabledPlugins.'their-plugin@their-mp' -eq $true)
-Check "kit plugin enabled (add-if-absent)"   ($s.enabledPlugins.'dimitri-claude-kit@dimitri-claude-kit' -eq $true)
+Check "kit plugin enabled (add-if-absent)"   ($s.enabledPlugins.'dimitri-claude-kit@claude-squidmode' -eq $true)
 $bk = Get-ChildItem (Join-Path $Fix '.kit-backups') -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
 Check "backup dir created"                   ($null -ne $bk)
 Check "backup holds original settings.json"  ($bk -and (Test-Path (Join-Path $bk.FullName 'settings.json')))

@@ -35,9 +35,12 @@ board-aware counterpart to `plan`'s from-scratch session):
   not pick). If the user would rather generate from scratch, send them to `/goals plan`.
 
 ## 3 — Commit to the tracker
-Write the confirmed plan via the CLI (single shared store, no second copy):
+Write the confirmed plan via the CLI (single shared store, no second copy). **Prefix each must with
+its assigned tier glyph** so the gradient you rendered in step 1 is stored and the standalone CLI
+re-renders it (the primary is always `★`, so it needs no prefix; a must with no prefix defaults to
+`●`):
 ```powershell
-& "$env:USERPROFILE\.claude\accountability\task-tracker.ps1" declare "<primary>" "<must>" "<must>"
+& "$env:USERPROFILE\.claude\accountability\task-tracker.ps1" declare "<primary>" "● <must>" "○ <must>" "▽ <must>"
 ```
 Then relay the resulting plan. Mention the ambient feed widget reflects it within ~10s if running;
 offer `task-tracker feed` only if the user says it is missing.

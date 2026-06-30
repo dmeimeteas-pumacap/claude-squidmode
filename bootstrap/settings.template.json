@@ -15,15 +15,15 @@
 
   "//hooks": "Only present if the SessionStart/Stop hooks ship via bootstrap instead of the plugin (README #1). If the plugin carries them, omit this block entirely.",
 
-  "//auto-update": "Declares the kit's OWN marketplace so a recipient auto-installs AND auto-updates it at startup. Third-party marketplaces are NOT auto-update by default, so a declarative entry with autoUpdate:true is the only way to make updates seamless. Merged add-if-absent (Merge-SettingsJson deep-merges these two object keys); never clobbers a recipient's existing marketplaces/plugins. The marketplace name and the plugin name are both 'dimitri-claude-kit', so the plugin ref is name@marketplace.",
+  "//auto-update": "Declares the kit's OWN marketplace so a recipient auto-installs AND auto-updates it at startup. Third-party marketplaces are NOT auto-update by default, so a declarative entry with autoUpdate:true is the only way to make updates seamless. Merged add-if-absent (Merge-SettingsJson deep-merges these two object keys); never clobbers a recipient's existing marketplaces/plugins. The marketplace is named 'claude-squidmode' (matches the repo) and the plugin is 'dimitri-claude-kit', so the plugin ref is plugin@marketplace = 'dimitri-claude-kit@claude-squidmode'. This key MUST match the 'name' in .claude-plugin/marketplace.json, which is what 'claude plugin marketplace add' registers the marketplace under.",
   "extraKnownMarketplaces": {
-    "dimitri-claude-kit": {
+    "claude-squidmode": {
       "source": { "source": "github", "repo": "dmeimeteas-pumacap/claude-squidmode" },
       "autoUpdate": true
     }
   },
   "enabledPlugins": {
-    "dimitri-claude-kit@dimitri-claude-kit": true
+    "dimitri-claude-kit@claude-squidmode": true
   },
 
   "//external-plugins": "The OPTIONAL enhancement plugins (andrej-karpathy-skills, code-simplifier) are still installed imperatively by install.ps1's Install-ExternalPlugins; they are not declared here."
