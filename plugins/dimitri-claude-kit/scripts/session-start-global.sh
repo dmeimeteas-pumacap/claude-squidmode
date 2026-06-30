@@ -416,6 +416,12 @@ $NEXT_SECTION
 "
   fi
 else
+  # No active threads yet (fresh setup / before the first /log). Show a one-line pointer so the
+  # board is never blank for a new recipient. Lead with a printable "─ " per the systemMessage
+  # printable-lead rule documented above (a banner starting with an ANSI escape gets dropped).
+  _E_RESET=$'\033[0m'; _E_BOLD=$'\033[1m'; _E_DIM=$'\033[2m'
+  _E_ACCENT=$'\033[38;2;177;185;249m'; _E_NL=$'\n'
+  BANNER_CONTENT="─ ${_E_BOLD}Active threads ──────────────────────────────────────────────────${_E_RESET}${_E_NL}${_E_NL}  ${_E_DIM}No threads yet. Use ${_E_RESET}${_E_ACCENT}/log${_E_RESET}${_E_DIM} to track a thread of work or thinking. They'll automatically show up here once you do.${_E_RESET}${_E_NL}"
   EOD_FILE="$NOTE_DIR/eod-latest.md"
   if [ -f "$EOD_FILE" ]; then
     FULL_CONTENT="$FULL_CONTENT

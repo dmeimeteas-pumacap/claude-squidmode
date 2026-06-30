@@ -44,6 +44,13 @@ $PluginRel = 'plugins/dimitri-claude-kit'
 $LeakPatterns = @('dmeimeteas','tjyoptions','pumacap','PumaCap',
   'C:\\Users\\dmeimeteas','/c/Users/dmeimeteas','[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 
+# Allowlist: substrings that legitimately ship even though they contain leak markers. ONLY the
+# kit's own public distribution repo -- the declarative auto-update entry in settings.template.json
+# REQUIRES the concrete repo path, and recipients already have this URL from `marketplace add`.
+# Stripped from each file's text before scanning, so a stray 'dmeimeteas'/'pumacap' elsewhere still
+# hard-fails. Keep this list to genuinely-public identifiers only.
+$LeakAllowList = @('dmeimeteas-pumacap/claude-squidmode')
+
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $Stage = Join-Path $env:TEMP "claude-kit-build-$Stamp"
 $Report = New-Object System.Collections.Generic.List[string]
@@ -108,8 +115,12 @@ function Sync-Hooks {
   }
   # copy the hand-maintained hooks.json + stamp the plugin-side version marker (B4)
   Copy-Item (Join-Path $RepoRoot "$PluginRel/hooks/hooks.json") (Stage-Path "$PluginRel/hooks/hooks.json") -Force
+  # Ship the Git Bash wrapper VERBATIM (no LF conversion -- cmd.exe needs CRLF). hooks.json invokes
+  # the .sh hooks through this instead of bare `bash`, so PATH order can't pick the WSL bash stub.
+  # It rides in the package, so `claude plugin update` re-ships it intact (no in-place patch to wipe).
+  Copy-Item (Join-Path $RepoRoot "$PluginRel/scripts/run-bash-hook.cmd") (Join-Path $destRoot 'run-bash-hook.cmd') -Force
   Write-NoBom (Join-Path $destRoot '.kit-version') $Version
-  $Report.Add("hooks: $($ShipHooks -join ', ') (D1-patched); .kit-version=$Version")
+  $Report.Add("hooks: $($ShipHooks -join ', ') (D1-patched) + run-bash-hook.cmd; .kit-version=$Version")
 }
 
 function Sync-BootstrapAssets {
@@ -204,6 +215,7 @@ function Assert-NoPersonalData {
   Get-ChildItem $Stage -Recurse -File | ForEach-Object {
     $text = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
     if (-not $text) { return }
+    foreach ($allow in $LeakAllowList) { $text = $text -replace [regex]::Escape($allow), '' }
     foreach ($pat in $LeakPatterns) {
       $m = [regex]::Matches($text, $pat)
       if ($m.Count -gt 0) { $hits.Add("  $($_.FullName.Substring($Stage.Length)) :: '$pat' x$($m.Count)") }

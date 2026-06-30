@@ -40,6 +40,7 @@ $script:Receipt = [ordered]@{
   backupDir = $null; filesOverwritten = @(); settingsKeysAdded = @()
   settingsConflictsKept = @(); arraysAppended = @(); scaffoldDirsCreated = @()
   tasksRegistered = @(); pluginsInstalled = @(); statusLine = 'untouched'; claudeMd = 'untouched'
+  themeCommand = 'untouched'
 }
 
 # Write UTF-8 WITHOUT BOM -- Claude Code's JSON parser silently ignores BOM'd files (known gotcha).
@@ -50,8 +51,8 @@ function To-Json { param($Obj) ,$Obj | ConvertTo-Json -Depth 20 }
 function Json-Eq { param($A, $B) (To-Json $A) -eq (To-Json $B) }
 
 # ---------------------------------------------------------------------------
-# Git Bash resolution + hook hardening -- find the REAL Git Bash (not the WSL stub) and pin the
-# installed plugin hooks to its absolute path, so hook execution never depends on PATH order.
+# Git Bash resolution -- find the REAL Git Bash (not the WSL stub) so install can warn early if it
+# is missing. The shipped run-bash-hook.cmd wrapper does the same resolution at hook runtime.
 # ---------------------------------------------------------------------------
 function Resolve-GitBash {
   $cands = @(
@@ -73,31 +74,10 @@ function Assert-GitBash {
   $script:Report.Add("[WARN] Git Bash not found. Install Git for Windows so the session-start + expand hooks can run.")
 }
 
-# Rewrite the INSTALLED plugin's hooks.json to invoke Git Bash by ABSOLUTE path instead of bare `bash`
-# -- removes the PATH-order dependency (WSL-stub-shadows-Git-Bash). bash is still invoked directly, so
-# hook stdin/behavior is unchanged. NOTE: `claude plugin update` restores the shipped bare-`bash`
-# version, so re-run this installer after any plugin update.
-function Repair-PluginHookPaths {
-  $gb = Resolve-GitBash
-  if (-not $gb) { return }   # Assert-GitBash already warned
-  $pluginsDir = Join-Path $ClaudeDir 'plugins'
-  if (-not (Test-Path $pluginsDir)) { $script:Report.Add("[INFO] plugin not installed yet -- run 'claude plugin install dimitri-claude-kit', then re-run this installer to harden hook paths."); return }
-  $files = Get-ChildItem $pluginsDir -Recurse -File -Filter 'hooks.json' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'dimitri-claude-kit' }
-  $patched = 0
-  foreach ($hf in $files) {
-    $o = Get-Content $hf.FullName -Raw | ConvertFrom-Json
-    $changed = $false
-    foreach ($evt in $o.hooks.PSObject.Properties) {
-      foreach ($grp in @($evt.Value)) {
-        foreach ($h in @($grp.hooks)) {
-          if ($h.command -like 'bash *') { $h.command = '"' + $gb + '"' + $h.command.Substring(4); $changed = $true }
-        }
-      }
-    }
-    if ($changed) { Write-NoBom $hf.FullName (To-Json $o); $patched++ }
-  }
-  if ($patched -gt 0) { $script:Receipt.hookPathHardened = $gb; $script:Report.Add("[HARDENED] $patched plugin hooks.json now invoke Git Bash by absolute path -- PATH-order-independent.") }
-}
+# NOTE: the installed plugin's hooks invoke Git Bash through the shipped scripts/run-bash-hook.cmd
+# wrapper (resolves Git Bash by absolute path, PATH-order-independent), so no in-place hooks.json
+# rewrite is needed and a `claude plugin update` re-ships the working wrapper intact. The old
+# Repair-PluginHookPaths patch was removed for this reason (it was wiped by every plugin update).
 
 # ---------------------------------------------------------------------------
 # Backup -- always before any write. Timestamped, never overwrites a prior backup.
@@ -145,6 +125,24 @@ function Merge-SettingsJson { param([string] $TemplatePath, [string] $TargetPath
             $present = @($curSub.($sub.Name)) | Where-Object { Json-Eq $_ $item }
             if (-not $present) { $curSub.($sub.Name) += $item; $changed = $true; $script:Receipt.arraysAppended += "$key.$($sub.Name)" }
           }
+        }
+      }
+      continue
+    }
+
+    # object-of-objects keys (declarative marketplace + enabled-plugins): add any sub-key the
+    # recipient lacks, keep theirs on conflict + report. This is what makes auto-update reach a
+    # recipient who already declares OTHER marketplaces/plugins -- a plain scalar merge would treat
+    # the whole object as one conflicting value and skip our entry entirely.
+    if ($key -in @('extraKnownMarketplaces','enabledPlugins')) {
+      if (-not $has) { $cur | Add-Member -NotePropertyName $key -NotePropertyValue $p.Value; $changed = $true; $script:Receipt.settingsKeysAdded += $key; continue }
+      foreach ($sub in $p.Value.PSObject.Properties) {
+        if ($cur.$key.PSObject.Properties.Name -notcontains $sub.Name) {
+          $cur.$key | Add-Member -NotePropertyName $sub.Name -NotePropertyValue $sub.Value; $changed = $true
+          $script:Receipt.settingsKeysAdded += "$key.$($sub.Name)"
+        } elseif (-not (Json-Eq $cur.$key.$($sub.Name) $sub.Value)) {
+          $script:Receipt.settingsConflictsKept += "$key.$($sub.Name)"
+          $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)' = your value (kit wanted '$($sub.Value)'; re-run with -Interactive to choose).")
         }
       }
       continue
@@ -226,6 +224,28 @@ function Install-StatusLine { param([string] $SettingsTarget)
 }
 
 # ---------------------------------------------------------------------------
+# /theme user command -- a USER-level ~/.claude/commands/theme.md makes BARE `/theme` run the
+# custom statusline picker. The plugin only provides the namespaced /dimitri-claude-kit:theme;
+# the bare command needs the user-level copy. (Live install missed this because the user commands
+# dir shipped empty.) Merge-safe: install only if absent; never overwrite a recipient's own.
+# ---------------------------------------------------------------------------
+function Install-ThemeCommand {
+  $src = Join-Path $PkgRoot 'plugins/dimitri-claude-kit/commands/theme.md'
+  if (-not (Test-Path $src)) { return }
+  $cmdDir = Join-Path $ClaudeDir 'commands'
+  if (-not (Test-Path $cmdDir)) { New-Item -ItemType Directory -Path $cmdDir -Force | Out-Null }
+  $dst = Join-Path $cmdDir 'theme.md'
+  if (Test-Path $dst) {
+    $script:Receipt.themeCommand = 'skipped (existing)'
+    $script:Report.Add("[SKIPPED] commands/theme.md exists -- left as-is. Bare /theme uses your copy; the kit's is at $src.")
+    return
+  }
+  Copy-Item $src $dst -Force
+  $script:Receipt.themeCommand = 'installed'
+  $script:Report.Add("[INSTALLED] commands/theme.md -- bare /theme now opens the custom palette picker (restart to load).")
+}
+
+# ---------------------------------------------------------------------------
 # Continuity scaffold -- empty dirs only, never seed personal content.
 # ---------------------------------------------------------------------------
 function Initialize-ContinuityScaffold {
@@ -287,9 +307,24 @@ function Install-EodScheduleOptional {
   if (-not $InstallEodSchedule) { return }
   $setup = Join-Path $ClaudeDir 'scripts/setup-eod-schedule.ps1'
   if (-not (Test-Path $setup)) { Copy-Item (Join-Path $PkgRoot 'bootstrap/scripts/setup-eod-schedule.ps1') $setup -Force }
-  & $setup   # idempotent; registers ClaudeEOD-Afternoon/Evening only if absent
-  $script:Receipt.tasksRegistered += @('ClaudeEOD-Afternoon','ClaudeEOD-Evening')
-  $script:Report.Add("[INSTALLED] scheduled /eod (runs Claude ~2x/day against your usage; remove via schtasks /delete /tn ClaudeEOD-*).")
+  $taskNames = @('ClaudeEOD-Afternoon','ClaudeEOD-Evening')
+  try {
+    & $setup   # idempotent; registers ClaudeEOD-Afternoon/Evening only if absent
+  } catch {
+    $script:Report.Add("[FAILED] scheduled /eod setup raised: $($_.Exception.Message)")
+  }
+  # Record VERIFIED outcome, never intent: query the scheduler and report only tasks that truly
+  # exist. Register-ScheduledTask fails with Access denied (0x80070005) on a domain-joined machine
+  # unless the shell is elevated, so a non-elevated run can silently register nothing.
+  $registered = @($taskNames | Where-Object { Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue })
+  $script:Receipt.tasksRegistered = $registered
+  $missing = @($taskNames | Where-Object { $_ -notin $registered })
+  if ($missing.Count -eq 0) {
+    $script:Report.Add("[INSTALLED] scheduled /eod ($($registered -join ', ')) -- runs Claude ~2x/day against your usage; remove via schtasks /delete /tn ClaudeEOD-*.")
+  } else {
+    $script:Receipt.tasksFailed = $missing
+    $script:Report.Add("[FAILED] scheduled /eod NOT registered: $($missing -join ', '). Task creation on a domain-joined machine needs elevation -- re-run this installer (or scripts/setup-eod-schedule.ps1) from an ELEVATED PowerShell.")
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -306,10 +341,10 @@ function Invoke-Bootstrap {
   Install-StatusLine -SettingsTarget $settingsTarget   # before Merge: settles the statusLine key
   Merge-SettingsJson -TemplatePath $tmplSettings -TargetPath $settingsTarget
   Install-ClaudeTemplate -TemplatePath $tmplClaude -TargetPath $claudeTarget
+  Install-ThemeCommand
   Initialize-ContinuityScaffold
   Install-ExternalPlugins
   Install-EodScheduleOptional
-  Repair-PluginHookPaths
 
   # Receipt (B5) -- enables a clean, version-independent v2 uninstall.
   Write-NoBom (Join-Path $ClaudeDir '.kit-install-receipt.json') (To-Json $script:Receipt)

@@ -2,7 +2,7 @@
     "name":  "dimitri-claude-kit",
     "displayName":  "Dimitri\u0027s Claude Kit",
     "description":  "Continuity + productivity setup for Claude Code: thread-based logging and catchup, daily orientation (morning/eod/goals), documentation generators, and skill-builder.",
-    "version":  "0.1.3",
+    "version":  "0.1.4",
     "author":  {
                    "name":  "Dimitri"
                },

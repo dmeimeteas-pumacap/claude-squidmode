@@ -13,7 +13,7 @@ function Check { param([string]$Name,[bool]$Cond)
 
 # --- build a populated, pre-existing ~/.claude fixture --------------------------------------
 New-Item -ItemType Directory -Path $Fix -Force | Out-Null
-Set-Content (Join-Path $Fix 'settings.json') '{ "model": "FIXTURE-MODEL", "myCustomKey": "keepme", "permissions": { "allow": ["Bash(echo:*)"] } }' -Encoding ascii
+Set-Content (Join-Path $Fix 'settings.json') '{ "model": "FIXTURE-MODEL", "myCustomKey": "keepme", "permissions": { "allow": ["Bash(echo:*)"] }, "extraKnownMarketplaces": { "their-mp": { "source": { "source": "github", "repo": "someone/else" }, "autoUpdate": false } }, "enabledPlugins": { "their-plugin@their-mp": true } }' -Encoding ascii
 $origClaude = "# My hand-authored CLAUDE.md`r`nDo not clobber this."
 Set-Content (Join-Path $Fix 'CLAUDE.md') $origClaude -Encoding ascii
 Set-Content (Join-Path $Fix 'statusline.ps1') '# my existing statusline' -Encoding ascii
@@ -45,6 +45,12 @@ Check "array entry preserved (permissions)"  (@($s.permissions.allow) -contains 
 Check "template key added (effortLevel)"     ($s.effortLevel -eq 'medium')
 Check "version stamped (_kitVersion)"        ($null -ne $s._kitVersion)
 Check "no template comment-keys leaked"      ($s.PSObject.Properties.Name -notcontains '//')
+# auto-update object-of-objects keys: add-if-absent for the kit's entry, preserve the recipient's.
+Check "their marketplace preserved"          ($null -ne $s.extraKnownMarketplaces.'their-mp')
+Check "kit marketplace added (add-if-absent)" ($null -ne $s.extraKnownMarketplaces.'dimitri-claude-kit')
+Check "kit marketplace autoUpdate true"      ($s.extraKnownMarketplaces.'dimitri-claude-kit'.autoUpdate -eq $true)
+Check "their enabledPlugin preserved"        ($s.enabledPlugins.'their-plugin@their-mp' -eq $true)
+Check "kit plugin enabled (add-if-absent)"   ($s.enabledPlugins.'dimitri-claude-kit@dimitri-claude-kit' -eq $true)
 $bk = Get-ChildItem (Join-Path $Fix '.kit-backups') -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
 Check "backup dir created"                   ($null -ne $bk)
 Check "backup holds original settings.json"  ($bk -and (Test-Path (Join-Path $bk.FullName 'settings.json')))
