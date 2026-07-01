@@ -38,6 +38,8 @@ Then restart Claude Code.
 - `-IncludeStatusLine` -- adopt the kit statusline even if you already have one (backs yours up first).
 - `-Interactive` -- prompt on each `settings.json` scalar conflict instead of keeping your value.
 - `-SkipExternalPlugins` -- don't touch your plugin set (skip the optional-enhancement installs).
+- `-NonInteractive` -- skip the optional-plugins `Read-Host` prompt (still installs the deps, keeps your
+  values on conflict). REQUIRED in any non-interactive shell, or the prompt blocks forever.
 
 **What the installer does (merge-safe):** backs up anything it touches to `~/.claude/.kit-backups/<stamp>/`,
 fills only missing `settings.json` keys (keeps your values on conflict + reports them), never touches an
@@ -48,8 +50,23 @@ PATH order can't break them (a `claude plugin update` resets this, so re-run the
 It prints a summary of everything it skipped or kept.
 
 ## Update
-1. Plugin half: `claude plugin update`
-2. Bootstrap half: re-run `install.ps1` (idempotent + merge-safe; a no-op run changes nothing).
+```
+claude plugin marketplace update dimitri-claude-kit          # refresh the git marketplace checkout
+claude plugin update dimitri-claude-kit@dimitri-claude-kit   # qualified <plugin>@<marketplace> form
+git config --global --add safe.directory <clone-path>        # only if the pull hits dubious-ownership
+git -C <clone-path> pull                                     # get install.ps1 for the new version
+powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap\install.ps1 -NonInteractive
+```
+Then restart Claude Code.
+
+Notes learned from live upgrades:
+- `claude plugin update` needs the **qualified** `<plugin>@<marketplace>` arg. A bare `claude plugin update`
+  errors "requires <plugin>", and the bare name `dimitri-claude-kit` errors "Plugin not found".
+- Re-run the bootstrap with **`-NonInteractive`**. Plain `install.ps1` hits a `Read-Host` prompt (optional
+  enhancement plugins) that blocks forever in a non-interactive shell; `-NonInteractive` skips it and still
+  installs the deps merge-safely.
+- If `git pull` fails with **exit 128 (dubious ownership)** -- the clone is owned by `BUILTIN\Administrators`
+  -- run `git config --global --add safe.directory <clone-path>` first.
 
 The two halves carry a version stamp; if the session-start hook warns about a version mismatch, you
 updated the plugin without re-running `install.ps1` -- just re-run it.
