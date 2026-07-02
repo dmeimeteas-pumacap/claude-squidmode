@@ -3,6 +3,14 @@
 A portable continuity + planning setup for Claude Code: persistent thread/goal tracking, a
 session-start briefing, daily wrap-ups, planning helpers, and a usage statusline.
 
+> **Fastest way to learn it: run `/tutorial`.** Once installed and restarted (below), `/tutorial`
+> gives you an interactive, hands-on walkthrough — including how to bring over an existing Claude
+> setup. Reading is optional; the tutorial does it with you.
+>
+> **Why do replies start with `🐤 canary`?** It's an optional health check from your `CLAUDE.md`: if
+> that line ever disappears or changes, it's an early sign Claude's context is drifting and you
+> should start a fresh session. Delete the Canary section in `CLAUDE.md` to turn it off.
+
 > **Just want the skills, no terminal setup?** On macOS/Linux, or in Claude.ai/desktop, see
 > **LITE.md** for the OS-agnostic skills-only path (no PowerShell bootstrap).
 

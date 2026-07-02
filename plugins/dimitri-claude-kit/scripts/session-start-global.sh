@@ -7,10 +7,11 @@ set -euo pipefail
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_STRIP="${HOOK_DIR%%/plugins/*}"
 if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
   CLAUDE_DIR="$CLAUDE_CONFIG_DIR"
-elif [ "$HOOK_DIR" != "${HOOK_DIR%%/plugins/*}" ]; then
-  CLAUDE_DIR="${HOOK_DIR%%/plugins/*}"
+elif [ "$HOOK_DIR" != "$_STRIP" ] && [ "$_STRIP" != "${_STRIP%/.claude}" ]; then
+  CLAUDE_DIR="$_STRIP"
 elif [ -n "${HOME:-}" ]; then
   CLAUDE_DIR="$HOME/.claude"
 else
@@ -101,34 +102,6 @@ trim() {
   REPLY="$s"
 }
 
-# Word-wrap $1 to content width $2 with a hanging indent: the first line is
-# prefixed with $3, wrapped continuation lines with $4. Result returned in $REPLY
-# (lines joined by $NL). Globbing is disabled around the split so EOD markdown
-# (**bold**, [tags]) is treated as literal words, not filename patterns. Width is
-# measured on the plain text only; the prefixes may carry ANSI codes (zero-width).
-wrap_indent() {
-  local text="$1" width="$2" p1="$3" pc="$4"
-  local out="" line="" word first=1
-  set -f
-  for word in $text; do
-    if [ -z "$line" ]; then
-      line="$word"
-    elif [ $(( ${#line} + 1 + ${#word} )) -le "$width" ]; then
-      line="$line $word"
-    else
-      if [ "$first" = 1 ]; then out="${p1}${line}"; first=0
-      else out="${out}${NL}${pc}${line}"; fi
-      line="$word"
-    fi
-  done
-  set +f
-  if [ -n "$line" ]; then
-    if [ "$first" = 1 ]; then out="${p1}${line}"
-    else out="${out}${NL}${pc}${line}"; fi
-  fi
-  REPLY="$out"
-}
-
 # Clip $1 to at most $2 characters on a word boundary, appending an ellipsis when
 # truncated. Result in $REPLY. Used by the recap to keep each Did/Next line on a
 # single row (no wrap). Plain text only -- never pass ANSI-coded strings in.
@@ -158,11 +131,38 @@ $(git -C "$PROJECT_DIR" log --oneline -8 2>/dev/null)
 
 ### Working tree
 $(git -C "$PROJECT_DIR" status --short 2>/dev/null)
-
+"
+  # Git-ack instruction. Suppressed on the first session of the day, where the
+  # morning orientation/recap owns the first reply (the two instructions otherwise
+  # overlap). Subsequent sessions still get the one-line acknowledgment.
+  if [ "$FIRST_SESSION_TODAY" != "1" ]; then
+    FULL_CONTENT="$FULL_CONTENT
 ## Instruction
 Begin your first reply with exactly one line acknowledging this context, e.g.:
 \"Session loaded: branch $BRANCH, $COMMIT_COUNT recent commits.\"
 Keep it to one line -- no extra commentary.
+"
+  fi
+fi
+
+# Freshest EOD recap into Claude's context (additionalContext), not only the
+# terminal banner. The banner's RECAP_BLOCK is systemMessage-only, so without this
+# the model briefs from the (possibly lagging) INDEX "Where I left off" one-liners
+# and never sees the newest synthesis. Injected before the thread table so it leads
+# and survives the additionalContext preview clip; reuses the fields already parsed
+# in the single EOD awk pass above (top 3 projects + top 3 priorities).
+if [ -n "$EOD_RECAP_DATE" ]; then
+  FULL_CONTENT="$FULL_CONTENT
+## Freshest recap — EOD ${EOD_RECAP_DATE}
+This EOD synthesis is the most recent record of the user's work. Lead the morning
+briefing from THIS recap and each thread's live \"## Next\" items below, NOT from the
+thread-table \"Where I left off\" one-liners, which can lag behind the latest EOD.${RECAP_PROJECTS:+
+
+**Projects touched**
+$RECAP_PROJECTS}${RECAP_NEXT:+
+
+**Priorities**
+$RECAP_NEXT}
 "
 fi
 
@@ -170,6 +170,17 @@ fi
 ACTIVE_ROWS=""
 if [ -f "$THREADS_INDEX" ]; then
   ACTIVE_ROWS=$(awk '/^## Active/{f=1;next} /^## /{f=0} f && /^[|] *\[\[/' "$THREADS_INDEX" || true)
+fi
+
+# Fresh-recipient detection (shared). A genuinely new user has the kit install receipt but has
+# NEVER created a thread and has not opted out. Used to (a) suppress orientation nudges that assume
+# prior history (yesterday's eod recap, the /goals call-to-action) and (b) show the /tutorial
+# onboarding nudge instead, so a first session has ONE clear next step, not a pile of misfires.
+FRESH_USER=0
+if [ -f "$CLAUDE_DIR/.kit-install-receipt.json" ] && [ ! -f "$CLAUDE_DIR/.tutorial-optout" ]; then
+  if [ -z "$(find "$CLAUDE_DIR/threads/active" "$CLAUDE_DIR/threads/done" -maxdepth 1 -name '*.md' -type f 2>/dev/null | head -n 1)" ]; then
+    FRESH_USER=1
+  fi
 fi
 
 if [ -n "$ACTIVE_ROWS" ]; then
@@ -422,6 +433,11 @@ else
   _E_RESET=$'\033[0m'; _E_BOLD=$'\033[1m'; _E_DIM=$'\033[2m'
   _E_ACCENT=$'\033[38;2;177;185;249m'; _E_NL=$'\n'
   BANNER_CONTENT="─ ${_E_BOLD}Active threads ──────────────────────────────────────────────────${_E_RESET}${_E_NL}${_E_NL}  ${_E_DIM}No threads yet. Use ${_E_RESET}${_E_ACCENT}/log${_E_RESET}${_E_DIM} to track a thread of work or thinking. They'll automatically show up here once you do.${_E_RESET}${_E_NL}"
+  # Fresh-recipient onboarding nudge (see FRESH_USER above): a genuinely new user gets ONE clear
+  # call to action -- /tutorial -- instead of orientation nudges that assume prior history.
+  if [ "$FRESH_USER" = "1" ]; then
+    BANNER_CONTENT="${BANNER_CONTENT}${_E_NL}  ${_E_ACCENT}▶ New here? Run /tutorial${_E_RESET}${_E_DIM} for a guided, hands-on walkthrough.${_E_RESET}${_E_NL}"
+  fi
   EOD_FILE="$NOTE_DIR/eod-latest.md"
   if [ -f "$EOD_FILE" ]; then
     FULL_CONTENT="$FULL_CONTENT
@@ -443,7 +459,7 @@ fi
 # First session of the day. Normal path: the recap banner above is rendered by this
 # hook and the marker is claimed below, so no skill needs to run. Recovery path (no
 # EOD dated yesterday): instruct a /eod regeneration, then a /goals nudge.
-if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ]; then
+if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ] && [ "$FRESH_USER" != "1" ]; then
   FULL_CONTENT="$FULL_CONTENT
 ## First session today — no recap from yesterday (${YESTERDAY})
 There is no EOD synthesis dated ${YESTERDAY}. Before addressing the user's first message, run the
@@ -457,13 +473,27 @@ fi
 # First-session call to action. The recap above shows where you left off; the day's
 # plan is yours to set, so nudge /goals (replaces the old morning-brief warning).
 # Appending to BANNER_CONTENT also forces the systemMessage branch below even with no
-# threads, so the nudge still shows on a thread-less first session.
-if [ "$FIRST_SESSION_TODAY" = "1" ]; then
+# threads, so the nudge still shows on a thread-less first session. Suppressed for a fresh
+# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /goals prompt with no context yet.
+if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$FRESH_USER" != "1" ]; then
   _W_RESET=$'\033[0m'
   _W_ACCENT=$'\033[38;2;177;185;249m'
   _W_DIM=$'\033[2m'
   _W_NL=$'\n'
   BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ Run /goals${_W_RESET}${_W_DIM} to set today's goals and plan for the day${_W_RESET}${_W_NL}"
+fi
+
+# Continuity-janitor drift surface: one dim line when the detector has cached findings.
+# Reads ONLY the cached JSON (no powershell spawn at startup); the "as of" timestamp makes a
+# stale cache self-evident. Suppressed on the first-session recovery path (/goals owns the CTA there).
+DRIFT_JSON="$CLAUDE_DIR/janitor/drift-latest.json"
+if [ -f "$DRIFT_JSON" ] && ! { [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ]; }; then
+  DRIFT_TOTAL=$(grep -o '"total"[^0-9]*[0-9]\+' "$DRIFT_JSON" | head -1 | grep -o '[0-9]\+$')
+  if [ -n "$DRIFT_TOTAL" ] && [ "$DRIFT_TOTAL" -gt 0 ] 2>/dev/null; then
+    DRIFT_WHEN=$(grep -o '"generated"[^"]*"[^"]*"' "$DRIFT_JSON" | head -1 | sed 's/.*"\([0-9T:-]*\)".*/\1/' | sed 's/T/ /; s/:[0-9][0-9]$//')
+    _D_RESET=$'\033[0m'; _D_DIM=$'\033[2m'; _D_NL=$'\n'
+    BANNER_CONTENT="${BANNER_CONTENT}${_D_NL}  ${_D_DIM}─ ${DRIFT_TOTAL} continuity drift items (as of ${DRIFT_WHEN}) - run /janitor${_D_RESET}${_D_NL}"
+  fi
 fi
 
 # Normal-path marker write: the recap banner was rendered by this hook directly (no

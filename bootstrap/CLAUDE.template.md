@@ -5,7 +5,10 @@
      drop specifics. Each section below marks KEEP (genericize wording) or REVIEW/STRIP. -->
 
 ## Canary
-<!-- KEEP — generic. Optional novelty; note recipients can remove it. -->
+Begin every reply with `🐤 canary` on its own first line, before anything else. It is a lightweight
+health check: if that line ever goes missing or changes, treat it as an early warning that the
+conversation's context is degrading, and start a fresh session before the drift shows up in the
+reasoning itself. Optional — delete this section if you don't want it.
 
 ## Peer reviewer, not problem-solver
 <!-- KEEP — generic behavioral rule. -->

@@ -84,7 +84,7 @@ $claudeExe = (Get-Command claude -ErrorAction SilentlyContinue).Source
 if (-not $claudeExe) { $claudeExe = Join-Path $env:USERPROFILE ".local\bin\claude.exe" }
 # Backstop for a stale Guard 0: if the run hits a rate-limit/quota error, exit cleanly
 # without retrying. A truly-exhausted account errors near-instantly (near-zero spend).
-$eodOut = & $claudeExe -p "/eod" --permission-mode bypassPermissions 2>&1 | Out-String
+$eodOut = & $claudeExe -p "/eod --unattended" --permission-mode bypassPermissions 2>&1 | Out-String
 $code = $LASTEXITCODE
 Write-Host $eodOut
 if ($code -ne 0 -and $eodOut -match '(?i)rate.?limit|usage limit|quota|exceeded|insufficient|out of') {

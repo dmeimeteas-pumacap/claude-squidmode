@@ -24,25 +24,17 @@ A comprehensive end-of-day wrap: "make sure everything impactful I did today is 
 me the EOD summary to paste into my notes." This is the manual counterpart to the scheduled `/eod`,
 for when work continued after the timed run.
 
-When the argument is `eod`, run the normal sweep with these overrides, then chain into `/eod`:
+**As of the sweep-first change, `/eod` (today mode) runs this sweep itself** — its Step 1 performs
+the today-scoped sweep (Discovery + Interactive, current session excluded) *before* synthesizing.
+So `/logall eod` is now a thin convenience alias: **invoke `/eod` (today mode)** and let it own the
+whole flow (sweep today's unlogged sessions → capture the current session → synthesize → echo the
+copy-ready report). Forward `--recheck` / `--since` to that run if the user passed them.
 
-1. **Force today-only scope.** Set `--since <today>` (calendar today) regardless of the default
-   30-day lookback. This is a daily wrap, not a backfill. `--recheck` is still honored if also
-   passed.
-2. **Exclude the currently-running session** from the candidate set. The live session that issued
-   this command is owned by `/eod` Step 1 (it runs a `/log` capture of the current conversation),
-   so logging it here would duplicate. Identify it as the JSONL for the active session and drop it
-   from `unlogged`.
-3. **Run the normal interactive flow** (Discovery → per-session accept/edit/skip/delete) over the
-   remaining today sessions. Same prompts, same ledger behavior.
-4. **After the sweep's "After all sessions" report, invoke `/eod` (today mode).** It captures the
-   current session, synthesizes the day from the now-fresh thread entries plus auto-logs and JSOLs,
-   writes `eod-latest.md`, and echoes the full report in a single fenced block (its Step 4b) for
-   pasting into notes.
+Do **not** run the sweep here and *then* call `/eod` — that would sweep twice (the second pass
+finds nothing, but it is wasted work and confusing). One sweep, owned by `/eod`.
 
-Net result of `/logall eod`: every impactful session from today is durably in its thread, and a
-fresh, copy-ready EOD summary is on screen. If the sweep finds zero unlogged sessions, skip
-straight to `/eod` — still produce the summary.
+Net result of `/logall eod` (unchanged for the user): every impactful session from today is durably
+in its thread, and a fresh, copy-ready EOD summary is on screen.
 
 ## Discovery phase
 
@@ -169,6 +161,16 @@ Show the synthesis to the user. Offer three options:
    = `permanent` (5th field). These are excluded from every future run, including `--recheck`.
 
 If the user edits, apply their corrections to the draft before writing.
+
+**Non-interactive (auto-accept) sweep.** When the sweep is driven by an unattended caller —
+specifically `/eod --unattended` from the scheduled launcher, where no human is present to answer —
+skip "Present and confirm" entirely and **auto-accept every synthesis**, writing each as a log
+entry. Do not offer skip/delete/permanent, and never delete a file. Mark each auto-written entry as
+AI-synthesized and unconfirmed (the `/log auto` markers: a `### <DATE> (auto — AI-selected,
+unconfirmed)` Log heading, the `⚠ AUTO (AI-selected thread, unconfirmed) — ` prefix on any
+overwritten `## Where I left off`, and a leading `[ ] Confirm this auto-capture landed on the right
+thread` Next item) so the entries are reviewable later via `/log confirm`. If a session maps to no
+existing thread, create one rather than dropping it — the priority is never losing context.
 
 ### Write
 

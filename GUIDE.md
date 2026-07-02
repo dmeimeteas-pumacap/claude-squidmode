@@ -3,6 +3,13 @@
 Full reference for the kit. New here? Start with **QUICKSTART.md**. Installing/updating/removing?
 See **INSTALL.md**.
 
+> **Prefer to learn by doing? Run `/tutorial`** after install — an interactive, hands-on
+> walkthrough of everything below, including migrating an existing Claude setup.
+>
+> **The `🐤 canary` on every reply** is an optional health check from `CLAUDE.md`: if that first
+> line ever goes missing or changes, it's an early signal the context is degrading and you should
+> start a fresh session. Remove the Canary section in `CLAUDE.md` to disable it.
+
 ## The continuity model
 Two stores, both yours and never shipped:
 - **Threads** (`~/.claude/threads/active|done/<slug>.md`) -- one per *effort* tracked across days.

@@ -20,10 +20,11 @@ set -euo pipefail
 # session-start-global.sh; this hook is its single owner.
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_STRIP="${HOOK_DIR%%/plugins/*}"
 if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
   CLAUDE_DIR="$CLAUDE_CONFIG_DIR"
-elif [ "$HOOK_DIR" != "${HOOK_DIR%%/plugins/*}" ]; then
-  CLAUDE_DIR="${HOOK_DIR%%/plugins/*}"
+elif [ "$HOOK_DIR" != "$_STRIP" ] && [ "$_STRIP" != "${_STRIP%/.claude}" ]; then
+  CLAUDE_DIR="$_STRIP"
 elif [ -n "${HOME:-}" ]; then
   CLAUDE_DIR="$HOME/.claude"
 else

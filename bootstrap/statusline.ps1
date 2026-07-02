@@ -1,6 +1,7 @@
 # Claude Code statusline: glanceable usage indicator.
 # Reads the statusline JSON payload on stdin and prints one line:
 #   5h: <circle> NN%  wk: <circle> NN%  ctx: <circle> NN%  tok: NNNk
+#   --- tok: NNk · rw: NNk [rN wN] · crw: NNk [rN wN] ---  (all dim; rw = fresh in/out, crw = cache r/w)
 # Circles fill by that metric's own percentage; color flags severity.
 # Rate-limit fields are absent until the first API response and only for
 # Pro/Max subscribers, so those degrade to "--" when missing.
@@ -364,8 +365,11 @@ if ($palette -ne 'default') { $accent = HexFg (EffectiveBar) }
 $fiveHr = $j.rate_limits.five_hour.used_percentage
 $week   = $j.rate_limits.seven_day.used_percentage
 $ctx    = $j.context_window.used_percentage
-$inTok  = $j.context_window.total_input_tokens
-$outTok = $j.context_window.total_output_tokens
+$cu     = $j.context_window.current_usage
+$rTok   = [double]$cu.input_tokens                 # fresh read  (uncached input)
+$wTok   = [double]$cu.output_tokens                # fresh write (model output)
+$crTok  = [double]$cu.cache_read_input_tokens      # cache read
+$cwTok  = [double]$cu.cache_creation_input_tokens  # cache write
 
 # Persist the latest rate-limit percentages so the scheduled /eod launcher
 # (run-eod.ps1 Guard 0) can pre-flight skip when usage is high. This is the ONLY
@@ -399,15 +403,19 @@ $parts += (
   (Segment "ctx" $ctx)
 )
 
-# Plan-neutral session weight: total tokens moved this session.
-if (($null -ne $inTok) -or ($null -ne $outTok)) {
-  $tok = [double]$inTok + [double]$outTok
-  if ($tok -ge 1000) {
-    $tokStr = "{0:N0}k" -f [math]::Round($tok / 1000)
-  } else {
-    $tokStr = "{0:N0}" -f $tok
-  }
-  $parts += "${dim}tok: $tokStr$reset"
+# Current-context token composition: tok = whole current window, with a
+# breakdown into rw (fresh input r + output w) and crw (cache read r +
+# cache write w). Values round to k and the subtotals/tok are summed FROM the
+# rounded leaves, so what's shown always adds up (rounding each independently made
+# the pieces disagree with the total). current_usage is absent before the first
+# API response, so the segment is skipped then.
+function Rk([double]$n) { [int][math]::Round($n / 1000.0, [System.MidpointRounding]::AwayFromZero) }
+if ($null -ne $cu) {
+  $rk = Rk $rTok; $wk = Rk $wTok; $crk = Rk $crTok; $cwk = Rk $cwTok
+  $rwk = $rk + $wk; $crwk = $crk + $cwk; $tokk = $rwk + $crwk
+  $mid = [char]0x00B7
+  $parts += "---"
+  $parts += "${dim}tok: ${tokk}k $mid rw: ${rwk}k [r$rk w$wk] $mid crw: ${crwk}k [r$crk w$cwk]$reset"
 }
 
 
