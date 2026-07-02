@@ -89,7 +89,8 @@ whole). This box layout is the STANDARD board output — always use it, not a ba
   overdue-review / blocker / duplicate. Use `★` sparingly — at most the single clear big-rock goal, or
   none — because the board's value is the relative ranking, not a lone primary.
 - Tier symbols (use only the ones that apply; order as listed):
-  - `★` PRIMARY — the declared big-rock / no-exceptions item; do it first, while fresh.
+  - `▸` QUICKSTART — a quick win to knock out first for momentum; leads even the primary. Not a big rock; a fast, low-commitment task done ahead of the anchors.
+  - `★` PRIMARY — the declared big-rock / no-exceptions item; the day's anchor.
   - `●` MUST — a today-must that comes after the primary is banked.
   - `◐` BREAK — an earned, lower-stakes step-away (e.g. tooling polish), not a day-eater.
   - `◇` STRETCH — nice-to-have only.
@@ -108,7 +109,8 @@ whole). This box layout is the STANDARD board output — always use it, not a ba
   right. Default inner width W = 100 (widen if labels need it; never shrink to fit one screen).
   2-space left margin, generous trailing space, a leading blank row after the header border, and a
   blank content row between goals.
-- **Single-width symbols only.** All tier symbols (`★ ● ◐ ◇ ○ ▽ ▲`) are single display-width. Do NOT
+- **Single-width symbols only.** All tier symbols (`▸ ★ ● ◐ ◇ ○ ▽ ▲`) are single display-width (`▸`
+  is U+25B8, the small text-presentation triangle — NOT U+25B6 `▶`, which is emoji-width). Do NOT
   introduce emoji or other double-width glyphs — they silently break alignment even when character
   counts match.
 

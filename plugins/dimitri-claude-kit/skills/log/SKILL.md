@@ -66,6 +66,9 @@ review_after: null        # reserved seam — future orientation/resurfacing lay
 ## Next
 - [ ] <ordered open items. OVERWRITTEN every capture.>
 
+## Conventions
+- <OPTIONAL — standing rules the effort applies repeatedly (NOT completable tasks). Omit the section entirely if the thread has none. Overwritten like `## Next`; holds rules, never checkboxes to complete; NOT parsed as open work by `/catchup` or the session-start banner.>
+
 ## Decisions
 - **YYYY-MM-DD — <one-line claim>.**
   Why: <forcing reason>.
@@ -82,7 +85,7 @@ review_after: null        # reserved seam — future orientation/resurfacing lay
 **Append-only sections** (`## Decisions`, `## Log`) are never edited. A superseded decision gets a
 new dated entry, not an edit — the reasoning chain must stay intact. New `## Log` entries are added
 **newest-first**, directly under the `## Log` heading (most recent on top). **Overwritten sections**
-(`## Where I left off`, `## Next`) are cheap rolling pointers; the Log + Decisions retain history.
+(`## Where I left off`, `## Next`, `## Conventions`) are cheap rolling pointers; the Log + Decisions retain history. `## Conventions` is optional (see the format above) — a thread carries one only when it has standing rules that would otherwise clutter `## Next`.
 
 ## Process
 

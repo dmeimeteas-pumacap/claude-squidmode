@@ -1,9 +1,9 @@
 ---
 name: eod
-description: "Cross-project synthesis of a single day's sessions. Reads that day's thread Log entries, auto-wrap logs, and JSONL transcripts to produce a unified daily handoff. Explicit-only: runs when the user types '/eod', and is invoked by /catchup in date-reconstruction mode. Does NOT auto-trigger on ambient phrases — capturing is /log, resuming is /catchup."
+description: "Cross-project synthesis of a single day's sessions. In today mode it first sweeps any of today's still-unlogged sessions into their threads (via the /logall sweep) so the synthesis reads a complete record, then reads that day's thread Log entries, auto-wrap logs, and JSONL transcripts to produce a unified daily handoff. Explicit-only: runs when the user types '/eod', and is invoked by /catchup in date-reconstruction mode. Does NOT auto-trigger on ambient phrases — capturing is /log, resuming is /catchup."
 user-invocable: true
 disable-model-invocation: true
-argument-hint: "[YYYY-MM-DD]  (target date; defaults to today)"
+argument-hint: "[YYYY-MM-DD] [--unattended]  (target date defaults to today; --unattended is set by the scheduled launcher and auto-accepts the sweep)"
 ---
 
 # EOD Skill
@@ -32,10 +32,36 @@ Explicit-only. Ambient capture is `/log`; ambient resume is `/catchup`.
 
 ## Process
 
-### Step 1 — Auto-capture current session (today mode only)
-If `<DATE>` is today and the current session's work hasn't been captured to a thread yet, run a
-`/log` capture first so the live conversation (the only directly-accessible session) is recorded.
-In reconstruction mode (past date), skip — there is no live session for that day.
+### Step 1 — Make the logs complete before synthesizing (today mode only)
+The synthesis below is only as good as the logs it reads, so close the logging gaps *first*. Two
+sub-steps, in order:
+
+1. **Sweep today's other unlogged sessions.** Run the `/logall` sweep scoped to today
+   (`--since <today>`, honoring `--recheck` if passed) with the currently-running session excluded
+   (it is owned by sub-step 2). This walks any other still-unlogged today-sessions into their
+   threads, so the synthesis sees a complete record rather than missing whatever ran since the last
+   capture. Two modes, decided by the `--unattended` flag:
+   - **Manual `/eod` (no `--unattended`):** run logall's **Discovery + Interactive** phases — the
+     normal per-session accept/edit/skip/delete flow. You are present to judge each one.
+   - **Unattended `/eod --unattended` (the scheduled launcher):** there is no human to prompt, so
+     run logall's **Discovery + Synthesize** and then **auto-accept and write every** synthesized
+     entry — no skip/delete/permanent decisions, never delete a file. Tag each auto-written entry
+     as AI-synthesized and unconfirmed exactly like `/log auto`: the Log heading is
+     `### <DATE> (auto — AI-selected, unconfirmed)`, prefix any overwritten `## Where I left off`
+     with `⚠ AUTO (AI-selected thread, unconfirmed) — `, and make the first `## Next` item
+     `[ ] Confirm this auto-capture landed on the right thread`. This trades review for never
+     losing a one-off session's context; the markers let you find and clean these later via
+     `/log confirm`. If a session genuinely maps to no thread, create one rather than dropping it.
+   - **Recursion guard (load-bearing):** in both modes run *only* logall's sweep phases (the
+     capture). Do **NOT** run logall's `eod` wrap tail that chains back into `/eod` — you are
+     already inside `/eod`, and chaining would loop.
+   - If the sweep finds zero unlogged sessions, just continue.
+2. **Capture the current session.** If the live conversation hasn't been captured to a thread yet,
+   run a `/log` capture so it is recorded — it is the only directly-accessible session and was
+   excluded from the sweep above.
+
+In reconstruction mode (past date), skip **both** sub-steps — there is no live session, and a past
+day's record is frozen.
 
 ### Step 2 — Discover all of `<DATE>`'s sources
 
@@ -84,20 +110,6 @@ Produce a unified daily handoff. Work section by section:
 
 **Sessions without recoverable context** — list any sessions where no thread entry, no auto-log, and no readable JSONL existed. These are permanent gaps.
 
-### Step 3b — Follow-through (today mode only; gated)
-Gate: run only if `~/.claude/session-notes/morning-latest.md` exists **and** is dated `<DATE>`. If
-it is absent or stale, skip this step entirely — output is unchanged on days with no morning
-intention.
-
-Read the morning intention (the chosen primary move + intended items) from `morning-latest.md`.
-For each intended item, use the day's already-discovered sources (Step 2A thread `## Log` entries
-and the Work-still-in-progress findings) to narrate whether it moved. Add a `## Follow-through`
-section, one line per item: `Committed: <X> — <what the day's sources show>.`
-
-Narrative only — no score, no percentage, no streak, no cadence. Reuses Step 2's discovery; add no
-new scanning. This is the morning↔EOD loop-close, deliberately minimal until the accountability
-layer exists.
-
 ### Step 4 — Output
 
 - **Today mode:** write `~/.claude/session-notes/eod-latest.md` using the structure below.
@@ -120,9 +132,6 @@ Structure:
 
 ## Work still in progress
 - <item> [<ProjectName>]
-
-## Follow-through   (today mode only; omit entirely if no morning intention for <DATE>)
-- Committed: <intended item> — <what the day's sources show>
 
 ## Files changed today
 - `path/to/file` — <ProjectName> — what changed
@@ -155,6 +164,24 @@ This is a console echo, not a file write — it does not violate the single-writ
 `eod-latest.md` file written in Step 4 **stays markdown** (the session-start hook consumes it); only
 this console echo is ASCII/outline.
 
+### Step 4c — Push to OneNote (today mode only; best-effort)
+Write the **exact Step 4b ASCII outline** (the content inside the fence, not the fence itself) to
+`~/.claude/eod/eod-latest.txt` (UTF-8), then trigger the paste task:
+```powershell
+Start-ScheduledTask -TaskName "ClaudeOneNotePaste-Eod"
+```
+**Why a scheduled task and not a direct script call:** OneNote's COM server is unreachable from an
+elevated process, and Dimitri's interactive sessions run elevated. The `ClaudeOneNotePaste-Eod` task
+runs at Limited (non-elevated) integrity, so triggering it de-elevates the paste. This makes the same
+step work from a manual elevated `/eod` and from the unattended scheduled EOD tasks. It writes the EOD
+into today's date subpage (title `M/d/yyyy`) under "Dimitri General", replacing any earlier EOD block
+from the same day. The outcome is appended to `~/.claude/eod/paste-last.log`.
+
+**Best-effort, never fatal**: the task runs asynchronously; do not block on it. If it fails (OneNote
+closed, machine locked, COM unavailable), the synthesis still stands. You may glance at
+`paste-last.log` for the Step 5 confirmation. Skip this step entirely in reconstruction mode (past
+dates).
+
 ### Step 5 — Confirm
 Tell the user:
 - Path written
@@ -167,8 +194,13 @@ Tell the user:
 ---
 
 ## Guardrails
-- Today mode writes **only** `~/.claude/session-notes/eod-latest.md`. Reconstruction mode writes
-  nothing — it returns the synthesis to the caller. No other writes in either mode.
+- Today mode writes `~/.claude/session-notes/eod-latest.md` (the synthesis) and, in Step 4c,
+  `~/.claude/eod/eod-latest.txt` (the ASCII outline handoff for the OneNote paste). Reconstruction
+  mode writes nothing — it returns the synthesis to the caller. No writes beyond these two in today
+  mode.
+- The Step 4c OneNote paste is the one outward action the skill takes (it edits a OneNote page,
+  via the `ClaudeOneNotePaste-Eod` scheduled task). It is best-effort and must never abort the
+  synthesis on failure.
 - Do not modify thread files, auto-logs, source code, or config files.
 - Do not include credentials, secrets, or connection strings.
 - JSONL reading is best-effort — never fail hard on parse errors; log the failure and skip.

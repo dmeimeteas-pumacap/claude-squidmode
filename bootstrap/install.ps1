@@ -356,6 +356,7 @@ function Invoke-Bootstrap {
   Write-Host "  Receipt: $ClaudeDir\.kit-install-receipt.json"
   Write-Host "--------------------------------------------------------------------"
   Write-Host "Done. Restart Claude Code so the plugin hooks + statusline load."
+  Write-Host "New here? After restarting, run /tutorial for a guided, hands-on walkthrough of the kit."
 }
 
 Invoke-Bootstrap

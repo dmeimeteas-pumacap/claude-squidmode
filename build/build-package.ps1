@@ -27,8 +27,8 @@ if (-not $Version) {
 
 # --- ALLOWLIST (executable source of truth; mirrors PACKAGE-MANIFEST.md) -------------------
 $ShipSkills = @('catchup','catchupall','change-review','document-process',
-  'document-section','eod','eow','goals','grill-me','log','logall','skill-builder','checkout','scrutinize-plan')
-$ExcludeSkills   = @('maystreet-pull','test-safety-audit','today','document-overall')   # coupled/deferred -- never ship
+  'document-section','eod','eow','goals','grill-me','log','logall','skill-builder','scrutinize-plan','tutorial')
+$ExcludeSkills   = @('maystreet-pull','test-safety-audit','today','document-overall','update-statuses')   # coupled/deferred/local -- never ship (update-statuses = renamed checkout, kept local for now)
 $ShipCommands    = @('theme.md')
 $ShipHooks       = @('session-start-global.sh','expand-prompt.sh')
 $BootstrapAssets = @(
@@ -89,13 +89,18 @@ function Sync-Hooks {
   # D1 (robust): the author's live hook lives at ~/.claude/hooks, so "$HOOK_DIR/.." works there.
   # Once installed as a PLUGIN the hook lives at ~/.claude/plugins/.../scripts, where "$HOOK_DIR/.."
   # points at the plugin dir, NOT ~/.claude -- so the thread INDEX is never found. Resolve in order:
-  # explicit CLAUDE_CONFIG_DIR -> derive ~/.claude from the /plugins/ path (foolproof, HOME-independent)
-  # -> $HOME/.claude -> $USERPROFILE/.claude (Windows fallback when HOME is unset).
+  # explicit CLAUDE_CONFIG_DIR -> derive from the /plugins/ path BUT ONLY when that strip lands on a
+  # real .claude dir -> $HOME/.claude -> $USERPROFILE/.claude (Windows fallback when HOME is unset).
+  # The .claude-suffix guard matters for a directory-source marketplace (e.g. a shared kit dir): there
+  # the plugin lives at <share>/plugins/..., so the strip yields <share> (NOT a .claude dir). Without
+  # the guard the hook reads/writes the wrong config dir and FRESH_USER never fires; with it that case
+  # falls through to $HOME/.claude. A normal install strips to ~/.claude, so it is unchanged.
   $newDeriv = (@(
+    '_STRIP="${HOOK_DIR%%/plugins/*}"'
     'if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then'
     '  CLAUDE_DIR="$CLAUDE_CONFIG_DIR"'
-    'elif [ "$HOOK_DIR" != "${HOOK_DIR%%/plugins/*}" ]; then'
-    '  CLAUDE_DIR="${HOOK_DIR%%/plugins/*}"'
+    'elif [ "$HOOK_DIR" != "$_STRIP" ] && [ "$_STRIP" != "${_STRIP%/.claude}" ]; then'
+    '  CLAUDE_DIR="$_STRIP"'
     'elif [ -n "${HOME:-}" ]; then'
     '  CLAUDE_DIR="$HOME/.claude"'
     'else'

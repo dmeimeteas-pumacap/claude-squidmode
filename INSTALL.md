@@ -3,6 +3,9 @@
 v1 is **Windows-only** (the bootstrap uses PowerShell + Task Scheduler). The plugin half is
 OS-agnostic; a `bootstrap.sh` for macOS/Linux is planned for v2.
 
+> **After installing + restarting, run `/tutorial`** for a guided, hands-on walkthrough of the kit
+> (and help migrating an existing Claude setup). It is the fastest way in.
+
 > Want the skills without the bootstrap (on a Mac, on Linux, or in Claude.ai/desktop)? That
 > path exists today -- see **LITE.md**. This file covers the full Windows install.
 

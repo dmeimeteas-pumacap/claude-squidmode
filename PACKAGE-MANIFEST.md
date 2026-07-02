@@ -8,7 +8,7 @@ human-readable mirror -- keep them in sync.
 ## Plugin bucket (additive, namespaced, auto-discovered at plugin root)
 - **Skills** (`skills/<name>/SKILL.md` + any sub-files): catchup, catchupall, change-review,
   document-process, document-section, eod, eow, goals, grill-me, log, logall,
-  skill-builder, checkout, scrutinize-plan
+  skill-builder, scrutinize-plan, tutorial
 - **Commands** (`commands/*.md`): theme.md
 - **Hooks** (`hooks/hooks.json` -> `scripts/`): session-start-global.sh, expand-prompt.sh
   - hook scripts are patched on sync to resolve `CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"` (D1).
@@ -27,6 +27,7 @@ QUICKSTART.md, GUIDE.md, INSTALL.md, LITE.md, README.md (author-facing)
 - maystreet-pull -- TheSquid/BLPAPI/MayStreet-specific
 - test-safety-audit -- coupled to a TheSquid ledger path
 - today -- coupled to the deferred accountability subsystem
+- update-statuses -- renamed from `checkout`; kept local for now (revisit when it's vetted to ship)
 - document-overall -- the system-overview skill is inherently tuned to YOUR system (hardcodes specific
   architecture/OneNote/DockerHub references); recipients build their own overview. Revisit if genericized.
 - (morning is retired; not present)
