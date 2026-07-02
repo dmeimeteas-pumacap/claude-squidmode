@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-bash-hook.cmd\" session-start-global.sh",
+            "command": "cmd.exe",
+            "args": ["/c", "${CLAUDE_PLUGIN_ROOT}/scripts/run-bash-hook.cmd", "session-start-global.sh"],
             "timeout": 60
           }
         ]
@@ -17,7 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run-bash-hook.cmd\" expand-prompt.sh",
+            "command": "cmd.exe",
+            "args": ["/c", "${CLAUDE_PLUGIN_ROOT}/scripts/run-bash-hook.cmd", "expand-prompt.sh"],
             "timeout": 30
           }
         ]

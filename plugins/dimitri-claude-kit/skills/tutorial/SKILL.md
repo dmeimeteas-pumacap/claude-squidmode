@@ -57,6 +57,16 @@ Before anything else, set the frame in 2-3 sentences so nothing that follows fee
   `CLAUDE.md` — if it ever disappears or changes, that's an early sign the context is degrading and
   you should start a fresh session. It can be removed.
 
+## Warm-up — Make it yours (run `/theme` first)
+Before the continuity mechanics, give them one quick, satisfying win that also teaches the basic
+move of running a slash command. *Why:* it's instant, low-stakes personalization and confirms
+commands work before anything depends on them.
+- Ask them to run `/theme` and pick a look they like.
+- **PowerShell note:** in the PowerShell terminal the theme options don't expand on their own — tell
+  them to click into the command line (the options list) to reveal the choices.
+- Wait for them to actually switch the theme before moving on — same one-step-at-a-time rule as the
+  rest of the tutorial.
+
 ## Step 2 — Resolve the `<name>` for their first thread
 Derive a suggested short name for the `<name>-claude-configuration` thread: use `git config
 user.name` if set, else `$env:USERNAME`. Present it and let them accept or override, e.g.:
