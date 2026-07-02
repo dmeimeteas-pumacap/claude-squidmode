@@ -198,7 +198,9 @@ function Generate-SkillReference {
     $md = Stage-Path "$PluginRel/skills/$s/SKILL.md"
     $desc = ''
     if (Test-Path $md) {
-      $m = [regex]::Match((Get-Content $md -Raw), '(?ms)^description:\s*"?(.*?)"?\s*$')
+      # Read as UTF-8 (BOM-detected). Get-Content -Raw decodes BOM-less UTF-8 as CP1252, which
+      # baked mojibake (em-dash -> "a-EUR" garble) into the generated table -- same fix as Sync-Hooks.
+      $m = [regex]::Match([System.IO.File]::ReadAllText($md), '(?ms)^description:\s*"?(.*?)"?\s*$')
       if ($m.Success) { $desc = ($m.Groups[1].Value -replace '\s+',' ').Trim() }
       if ($desc.Length -gt 240) { $desc = $desc.Substring(0,237) + '...' }
     }
