@@ -5,9 +5,9 @@ Do not edit the table manually — `document-section` owns it. Notes and comment
 
 ## Coverage Table
 
-| Project | Category | Tier | Mode | Status | Doc path | Open Qs (H/L/R) | Last run |
-|---|---|---|---|---|---|---|---|
-| _example: Squid.AzFn.TradeSvc_ | AzFn | Brief | create | done | `Documentation/AzFn/TradeSvc.md` | 0/1/2 | 2025-01-15 |
+| Project | Category | Tier | Mode | Status | Doc path | Source path | Open Qs (H/L/R) | Last run |
+|---|---|---|---|---|---|---|---|---|
+| _example: Squid.AzFn.TradeSvc_ | AzFn | Brief | create | done | `Documentation/sections/AzFn/TradeSvc.md` | `Squid.AzFn.TradeSvc` | 0/1/2 | 2025-01-15 |
 
 ### Category values
 - `WinSvc` — `Squid.WinSvc.*` Windows/Docker services

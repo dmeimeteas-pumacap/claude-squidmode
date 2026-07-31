@@ -8,7 +8,10 @@ human-readable mirror -- keep them in sync.
 ## Plugin bucket (additive, namespaced, auto-discovered at plugin root)
 - **Skills** (`skills/<name>/SKILL.md` + any sub-files): catchup, catchupall, change-review,
   document-process, document-section, eod, eow, goals, grill-me, log, logall,
-  skill-builder, scrutinize-plan, tutorial
+  skill-builder, scrutinize, today, tutorial
+  - since v0.1.6: `goals` + `today` are the two-door model (single-file `goals/goals.md` area store;
+    `today` owns `accountability/today.md` directly — no CLI, external mirrors off by default via
+    `accountability/config.json` `onenotePlanMirror:false`). `scrutinize` renamed from scrutinize-plan.
 - **Commands** (`commands/*.md`): theme.md
 - **Hooks** (`hooks/hooks.json` -> `scripts/`): session-start-global.sh, expand-prompt.sh
   - hook scripts are patched on sync to resolve `CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"` (D1).
@@ -26,8 +29,9 @@ QUICKSTART.md, GUIDE.md, INSTALL.md, LITE.md, README.md (author-facing)
 ## EXCLUDED skills (deliberately NOT shipped in v1)
 - maystreet-pull -- TheSquid/BLPAPI/MayStreet-specific
 - test-safety-audit -- coupled to a TheSquid ledger path
-- today -- coupled to the deferred accountability subsystem
-- update-statuses -- renamed from `checkout`; kept local for now (revisit when it's vetted to ship)
+- reconcile + deepclean -- want to ship, but they depend on the janitor engine
+  (`janitor/detect-drift.ps1` + the staleness hook); ship them together with that bootstrap wiring
+  in a later increment. (update-statuses/current/task-tracker no longer exist -- folded 2026-07-31.)
 - document-overall -- the system-overview skill is inherently tuned to YOUR system (hardcodes specific
   architecture/OneNote/DockerHub references); recipients build their own overview. Revisit if genericized.
 - (morning is retired; not present)

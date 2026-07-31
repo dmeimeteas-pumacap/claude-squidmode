@@ -27,8 +27,8 @@ if (-not $Version) {
 
 # --- ALLOWLIST (executable source of truth; mirrors PACKAGE-MANIFEST.md) -------------------
 $ShipSkills = @('catchup','catchupall','change-review','document-process',
-  'document-section','eod','eow','goals','grill-me','log','logall','skill-builder','scrutinize-plan','tutorial')
-$ExcludeSkills   = @('maystreet-pull','test-safety-audit','today','document-overall','update-statuses')   # coupled/deferred/local -- never ship (update-statuses = renamed checkout, kept local for now)
+  'document-section','eod','eow','goals','grill-me','log','logall','skill-builder','scrutinize','today','tutorial')
+$ExcludeSkills   = @('maystreet-pull','test-safety-audit','document-overall')   # coupled/local -- never ship. (today ships since v0.1.6: the DAY door, CLI-free. update-statuses/current/task-tracker skills deleted 2026-07-31, folded into reconcile//goals//today.)
 $ShipCommands    = @('theme.md')
 $ShipHooks       = @('session-start-global.sh','expand-prompt.sh')
 $BootstrapAssets = @(

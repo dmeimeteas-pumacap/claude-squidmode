@@ -146,7 +146,7 @@ meanings: `spine` = taught hands-on in Beat 2, `highlight` = one-line pointer in
 | `/catchupall` | Panoramic view of every active thread. | mention |
 | `/eow` | End-of-week roll-up. | mention |
 | `/grill-me` | Get interrogated on a plan until it holds. | mention |
-| `/scrutinize-plan` | Independent adversarial critique of a plan. | mention |
+| `/scrutinize` | Independent adversarial critique of any subject (plan/product/idea). | mention |
 | `/skill-builder` | Build your own skills. | mention |
 | `/logall` | Sweep sessions you forgot to log. | mention |
 | `/change-review` | Inline diff review format for code edits. | mention |

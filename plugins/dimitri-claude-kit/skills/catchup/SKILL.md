@@ -64,13 +64,26 @@ Never blindly `cat` a whole thread. Read in tiers, stop as soon as you have enou
 Pick the tier from how stale `last_touched` is and what the user asked. When unsure between 0 and
 1, choose 1 — the rationale is the point of coming back.
 
+### Co-evolving siblings (lazy sibling load)
+If the resolved thread's frontmatter has a **`coevolves_with`** list, its sibling(s) are declared
+co-evolving — always contextually relevant, not merely "related." **Lazily** load them:
+1. Read the main thread at the tier you picked above.
+2. Then read each sibling's **Tier 0 only** (frontmatter + `## Where I left off` + `## Next`) and
+   fold it into your understanding — the sibling is assumed relevant unless clearly not.
+3. Escalate a sibling to Tier 1 **only as the task needs it** (e.g. the user's question turns on the
+   sibling's decisions, or the main thread's Next points into it). Don't Tier-1 every sibling by default.
+This is the standing "always aware of the other" behavior — no "want me to pull up X?" prompt for
+co-evolving siblings (that prompt is for plain `related:` links); state briefly that you're carrying
+the sibling's context. `coevolves_with` is symmetric — reading either sibling loads the other.
+
 ## Briefing
 
 After reading, brief in a few sentences, not a file dump:
 - Where they are now (`## Where I left off`).
 - The most relevant past decision(s) and **why** (from `## Decisions`).
 - The next physical action (`## Next`).
-- Any **correlated** threads (from `related:`), offered as "want me to also pull up X?".
+- Any **correlated** threads (from `related:`), offered as "want me to also pull up X?". (For
+  `coevolves_with` siblings, don't offer — you've already lazily loaded their Tier 0; just note it.)
 
 Then offer the verbose escape hatch: "Say `view` to see the complete detail." On `view`,
 escalate the read one tier if needed (Tier 0 → Tier 1) and print, **verbatim and untruncated**: the

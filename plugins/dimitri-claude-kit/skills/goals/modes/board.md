@@ -1,64 +1,63 @@
 # Mode: board (bare `/goals`, or `/goals week|long|all`)
 
-Derived dashboard. **Writes nothing.** This is the hot path — keep the read scoped. Do NOT load
-`reference.md` here.
+Derived dashboard AND the status report — this absorbed `/current` (2026-07-31): today's tasks +
+area progress (live counts) + open thread `## Next` items + drift footer, one view. **Writes
+nothing.** This is the hot path — keep the read scoped. Do NOT load `reference.md` here.
 
-## 1 — Scoped read (do not `cat` whole goal files)
-Read only each active goal's **frontmatter** + the **requested horizon section**. The Larger /
-Requirements / Reminder-mechanism prose is dead weight in context for a board pull — skip it.
+## 1 — Read the store (one file now)
+Read `~/.claude/goals/goals.md` — the single area store. Each `## ` section = an area: metadata line
+(`id: … · prio: <n> · review_after: …`), optional `live_progress:` / `thread:` lines, `north-star:`,
+then its task list (`- [ ]` items with `{deadline|this-week|evergreen}` tags and `↻ N` rollovers,
+possibly with `> note` lines beneath).
 
-Goal files supply frontmatter + the WEEKLY/LARGER horizons. **DAILY is NOT read from goal files** —
-it comes from the task-tracker (the single source of truth for today, shared with `/goals today` and
-the feed widget). Goal-file `### Daily` sections no longer drive the board (retire them in cleanup).
+**DAILY is NOT read from goals.md** — it comes from the day store `~/.claude/accountability/today.md`
+(the single source of truth for today, owned by `/today`; format in `modes/today.md`). Read it
+directly.
 
-```bash
-cd ~/.claude/goals/active
-for f in *.md; do
-  echo "=== $f ==="
-  awk 'c<2{print} /^---$/{c++}' "$f"                                            # frontmatter (through 2nd ---)
-  awk '/^### (Weekly|Larger)$/{print;p=1;next} /^### /{p=0} /^## /{p=0} p' "$f"  # weekly + larger blocks
-done
+Scope by argument:
+- (no arg) → the **broad view**. **DAILY** = the day store, rendered **abbreviated**: the primary
+  line + open/done counts + a single `run /today` pointer (NOT the full task list). **AREAS** =
+  every area's open tasks in full, grouped per area, prio order.
+- `week` → only tasks tagged `{this-week}` or `{deadline:…}` falling within 7 days.
+- `long` → only `{evergreen}` tasks + each area's north-star line.
+- `all` → the broad view but DAILY in full (the day store's whole list with tick state), plus every
+  area's full task list including `- [x]` completed records.
+
+## 1b — Live progress for ledger-backed areas
+If an area carries a `live_progress:` line (`` `cmd` → `pattern` ``), get its live count from the
+shared detector rather than re-running commands ad hoc:
 ```
-Then read DAILY from the task-tracker (single source): `task-tracker show` (i.e.
-`~/.claude/accountability/task-tracker.ps1 show`), which prints the day's primary + musts with tick state.
-
-Collect items for the requested horizon:
-- (no arg) → the **broad view**. **DAILY** = the task-tracker, rendered **abbreviated**: the primary
-  line + open/done counts + a single `run /goals today` pointer (NOT the full task list). **WEEKLY +
-  LARGER** = each goal file's `### Weekly`/`### Larger`, in full. The bare board is the zoomed-out
-  picture; the day's full detail lives in `/goals today`.
-- `week` → `### Weekly` only (swap the heading in the second awk).
-- `long` → `### Larger` only (render its prose as-is when it is not a checklist).
-- `all` → same as the broad view but **DAILY in full** (the task-tracker's whole list with tick state,
-  not just counts), plus WEEKLY + LARGER in full, grouped by horizon.
-
-## 1b — Live progress for ledger-backed goals
-If a goal's frontmatter carries a `live_progress` block (`cmd` + `pattern`), run `cmd` and parse
-`pattern` (a regex whose first two capture groups are done/total). Use that LIVE count as the goal's
-`progress` in the box meta tag and in the recommendation — it overrides any number in the item text
-or a stale snapshot, because a ledger-backed count drifts the moment a verdict is recorded.
-Display-only: the board writes nothing, so the goal file's own text may lag (expected — the live read
-is the truth shown). If `cmd` fails or is unreachable, fall back to the item text and surface a
-`▲ FLAG` row noting the live count could not be read.
+powershell -NoProfile -File "%USERPROFILE%\.claude\janitor\detect-drift.ps1" -Quiet
+```
+then read the `live` array from `~/.claude/janitor/drift-latest.json` (`{goal, ok, num, den, pct}`).
+Use the LIVE count in the area's meta tag and the recommendation — it overrides any number in task
+text. Display-only. If `ok:false` (or the detector is absent — then run the area's cmd inline as
+fallback), fall back to task text and surface a `▲ FLAG` row noting the live count could not be
+read. Respect env preconditions (e.g. the audit's `Audit.ps1` only reports correctly on the
+**Dimitri branch** — memory `audit-ledger-check-dimitri-branch`); if a count looks off, name the
+precondition, don't trust it.
 
 ## 2 — Linked thread Next items
-Via `links.tsv`, find threads linked to active goals; read those threads' `## Next` items.
+Via `links.tsv` (area-id → thread-slug), read each linked ACTIVE thread's `## Next` and collect the
+open (`- [ ]`) items, one line each (top 4 + `(+N more)` per thread). Close with any active thread
+no area links (nothing silently dropped). These are alignment pointers (thread = memory), shown so
+the board is the one-stop view — flag obvious divergence from area tasks, do not merge.
 
 ## 3 — Reviews due
-Surface any goal whose `review_after` ≤ `<DATE>` as due-for-review (`▲ FLAG`).
+Surface any area whose `review_after` ≤ `<DATE>` as due-for-review (`▲ FLAG`).
 
 ## 4 — EOD digest (best-effort)
 Read `~/.claude/session-notes/eod-latest.md` for context (in-progress + tomorrow's priorities). Skip
 if absent.
 
 ## 5 — Flag duplicates (do not merge)
-Flag obvious duplicates across goal-`Daily` and thread-`Next`.
+Flag obvious duplicates between area tasks and thread `## Next` pointers.
 
 ## 6 — Next-action recommendation
-Given active goals, priorities, the declared primary/big-rock, and any stated energy/blockers,
-recommend what to work on now and in what order, with reasoning. Encode: importance ≠ urgency ≠
-readiness (deprioritize blocked/undefined/already-worked-around items even if labeled high); protect
-the declared primary and do demanding work while fresh; use quick-wins as momentum or breaks, not
+Given the areas, priorities, the declared tracker primary, and any stated energy/blockers, recommend
+what to work on now and in what order, with reasoning. Encode: importance ≠ urgency ≠ readiness
+(deprioritize blocked/undefined/already-worked-around items even if labeled high); protect the
+declared primary and do demanding work while fresh; use quick-wins as momentum or breaks, not
 day-eaters; name the EF pattern at play and point at the smallest concrete next step. Give a
 definitive recommendation with a clear default plus at most one caveat — **not** an even-handed menu.
 
@@ -68,31 +67,22 @@ whole). This box layout is the STANDARD board output — always use it, not a ba
 
 - Header line: `GOALS BOARD — <Weekday YYYY-MM-DD>`. Optional second line for staleness/context
   (e.g. last EOD date, intervening non-work days).
-- **Horizon-grouped layout (standard for the broad board and `all`).** Group the open items under
-  horizon sub-headers so weekly vs longer-term is unmistakable: a `--- DAILY ---`, `--- WEEKLY ---`,
-  and `--- LARGER ---` divider line, with that horizon's open items beneath it. One line per item:
-  `  <symbol> [<goal-id>] <terse item / smallest next step>` — 2-space margin, the fixed-meaning tier
-  symbol, the goal id in brackets (padded to a fixed column so the text aligns), then a one-line gist
-  (clip, do not wrap).
-  - **DAILY group — sourced from the task-tracker, always present.** On the **bare** board render it
-    ABBREVIATED: the primary line (with its `★`) + open/done counts, plus a single pointer
-    `run /goals today for the full day` — e.g. `★ Matt's notepad review` / `2 done · 4 open`. On
-    `/goals all`, render the tracker's full task list with tick state. Show the `--- DAILY ---` header
-    even when no plan is set (`(no plan set — run /goals today)`).
-  - **WEEKLY / LARGER groups** are rendered in full (Larger as a one-line prose gist per goal when it
-    is not a checklist). These two distinct headers are what make weekly-vs-longer-term explicit.
-- **Tier assignment differs on the board.** On `/goals today`, `★` = today's declared task-tracker
-  primary and tiers track the day's plan. On the bare/broad board, tiers express each goal's
-  **standing priority/value across the week**, NOT today's task. Assign a **spread** across the symbol
-  set so the board shows the value gradient rather than collapsing to one priority: high-priority
-  goals → `★`/`●`, normal → `○`, low/deprioritized → `▽`, stretch/nice-to-have → `◇`, and `▲` for any
-  overdue-review / blocker / duplicate. Use `★` sparingly — at most the single clear big-rock goal, or
-  none — because the board's value is the relative ranking, not a lone primary.
+- Layout: a `--- TODAY ---` divider (the tracker block, abbreviated or full per scope), then one
+  block per AREA in prio order: an area header line
+  `<symbol> <Area title>  [prio <n>] <live N/M (P%) when present> <▲ review due when due>`, then its
+  open tasks beneath, one line each:
+  `  - <terse task> {tag} ↻ N` — clip, do not wrap. Then the area's linked-thread pointer lines
+  (from step 2), prefixed `  » <thread>: <open next item>`. End with an
+  `--- OTHER ACTIVE THREADS ---` block for unlinked threads, when any.
+- **Tier assignment on the board** expresses each area's **standing priority/value**, NOT today's
+  task: prio 1 areas → `★`/`●`, mid → `○`, low/deprioritized → `▽`, stretch → `◇`, `▲` for any
+  overdue-review / blocker / duplicate flag. Use `★` sparingly — at most the single clear big-rock
+  area, or none. (On `/today`, `★` = the day's declared primary instead.)
 - Tier symbols (use only the ones that apply; order as listed):
-  - `▸` QUICKSTART — a quick win to knock out first for momentum; leads even the primary. Not a big rock; a fast, low-commitment task done ahead of the anchors.
-  - `★` PRIMARY — the declared big-rock / no-exceptions item; the day's anchor.
-  - `●` MUST — a today-must that comes after the primary is banked.
-  - `◐` BREAK — an earned, lower-stakes step-away (e.g. tooling polish), not a day-eater.
+  - `▸` QUICKSTART — a quick win to knock out first for momentum; leads even the primary.
+  - `★` PRIMARY — the declared big-rock / no-exceptions item; the anchor.
+  - `●` MUST — comes after the primary is banked.
+  - `◐` BREAK — an earned, lower-stakes step-away, not a day-eater.
   - `◇` STRETCH — nice-to-have only.
   - `○` STEP-BACK — secondary / variety work that must not displace the primary.
   - `▽` BACKBURNER — explicitly deprioritized this cycle.
@@ -108,13 +98,19 @@ whole). This box layout is the STANDARD board output — always use it, not a ba
 - **Breathing room (required).** Favor readability over compactness — the box MAY extend well to the
   right. Default inner width W = 100 (widen if labels need it; never shrink to fit one screen).
   2-space left margin, generous trailing space, a leading blank row after the header border, and a
-  blank content row between goals.
+  blank content row between areas.
 - **Single-width symbols only.** All tier symbols (`▸ ★ ● ◐ ◇ ○ ▽ ▲`) are single display-width (`▸`
   is U+25B8, the small text-presentation triangle — NOT U+25B6 `▶`, which is emoji-width). Do NOT
   introduce emoji or other double-width glyphs — they silently break alignment even when character
   counts match.
 
-## 8 — Footer (mode discovery)
-After the box, print one line so modes stay discoverable (bare `/goals` is no longer a menu):
+## 8 — Drift footer + offers (absorbed from /current)
+Read the `findings` array from the `drift-latest.json` refreshed in step 1b (same run, so counts
+agree). If `counts.total > 0`, print a short **drift** block under the box — one line per finding,
+grouped (cap ~5 lines; if more, show the count + the top few) — and point at the fixer:
+`Resolve drift → /reconcile.` If `counts.total == 0`, omit the block.
 
-`modes: /goals today · plan · new "title" · dump · review · set <id> · link <goal> <thread> · done [<id>] · week|long|all`
+## 9 — Footer (mode discovery)
+Last line, so modes stay discoverable (bare `/goals` is no longer a menu):
+
+`modes: /today (day door) · new "title" · review · set <id> · link <area> <thread> · done [<id>] · dump · week|long|all`

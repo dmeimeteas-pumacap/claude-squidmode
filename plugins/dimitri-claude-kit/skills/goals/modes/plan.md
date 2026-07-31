@@ -1,44 +1,49 @@
-# Mode: plan (guided generative grounding session)
+# Mode: plan (day-planning coach — pick a style, then route)
 
-**Purpose:** help the user figure out what is actually on their mind — priorities and tasks — by
-asking broad grounding questions, then route what surfaces to the right place. It is a **less
-pointed sibling of `new`**: `new` is laser-focused on creating one specific goal; `plan` is the open
-"let's figure out what I'm carrying" session that can *lead into* `new` (durable ambitions) and into
-`today` (today-scoped tasks).
+`/goals plan` is an executive-functioning coach for structuring the day. It does NOT lead with your
+topics or your goal history — it helps you shape time/effort first. It resolves a **planning style**
+(a submode), then loads only that submode's file.
 
-**Writes nothing to the goals store directly.** Durable items get created via the `new` framework
-(its own review gate). Today-scoped items get committed via `today` (which writes the task-tracker
-store, `accountability/today.md`). Both happen only with the user's confirmation.
+## 1 — Resolve the sub-argument
+Parse the token after `plan`:
 
-## 1 — Do NOT front-load the board
-The point is generation, not review. Do NOT open the board or read goal files first — that anchors
-the user to old framing. Start by prompting them to think.
+| `/goals plan …` | Submode | Read and follow |
+|---|---|---|
+| `guided` | structure the day tier-by-tier (effort/importance first) | `modes/plan-guided.md` |
+| `brainstorm` | sounding board, no assignments yet | `modes/plan-brainstorm.md` |
+| `dump` | brain-dump prose → proposed goals | `modes/dump.md` (+ `reference.md`) |
+| `propose` | I propose the day from prior context | `modes/plan-propose.md` |
+| `yesterday` \| `carryover` | print yesterday verbatim, then branch (check off / carry over+add / propose) | `modes/plan-yesterday.md` |
+| (none) | show the picker (step 2), then dispatch | — |
 
-## 2 — Grounding questions (broad, capped, one at a time)
-Ask open grounding questions, **stopping after each** (clarification-first style). Cap at ~3-4 — the
-failure mode is turning this into a planning marathon, so stop once there is enough to work with.
-Pick/adapt:
-- "What's on your mind right now — what are you carrying or want to make progress on? Brain-dump, don't filter."
-- "Of that, what actually matters this week vs just noise?"
-- "What's the one thing that has to happen today?"
-- "Anything nagging that you keep putting off?"
+**Route `yesterday` on the natural phrasings too**, not just the literal token: "based on yesterday",
+"carry over from yesterday", "carrying over based on yesterday's", "plan today from yesterday". These
+all mean the print-yesterday-first flow, NOT the straight-to-proposal `propose`.
 
-If the user front-loads everything in the first answer, skip ahead. EF note: if they spin or
-over-scope, name it lightly and pull toward "what's the ONE must" — do not let it balloon.
+`/goals dump` (top-level) is retired — if the user types it, treat it as `plan dump`.
 
-## 3 — Reflect + sort
-Reflect back what surfaced, in the user's own words, sorted into two buckets:
-- **Durable** — ongoing ambitions / multi-day efforts (goal-shaped).
-- **Today** — concrete things to get done today (task-shaped).
-Mark a single PRIMARY among the today bucket (the one must).
+## 2 — The picker (bare `/goals plan`)
+Do NOT read the board or any goal/thread files yet — that anchors old framing. Present a numbered
+picker and wait for the choice. (`AskUserQuestion` caps at 4 options and cannot hold this list, so
+this is a numbered text menu.)
 
-## 4 — Route (offer, do not auto-write)
-- **Durable bucket → `new` framework.** For each goal-shaped item, offer to create it via the `new`
-  capped interview (read `new.md`), with its dedup + review gate. Bias toward extending an existing
-  goal over creating a new one. Offer, do not auto-create.
-- **Today bucket → hand to `today`.** Pass the PRIMARY + today musts to mode `today` (read
-  `today.md`), which commits them to the task-tracker store and shows the day's plan. This is the
-  standard close of a `plan` session.
+1. **Guided** — plan around effort/importance before topics/specifics
+2. **Brainstorm** — just talk it through, no assignments yet
+3. **Dump** — throw everything on your mind at me, we break it down after
+4. **Propose** — I tell YOU what I think from prior goals and conversations
+5. **Yesterday** — print yesterday verbatim first, then choose: check off / carry over+add / propose
+6. **None** — I'll plan later
 
-Keep routing light — a few lines, not a full board render. If the user only wanted to think out
-loud, leaving everything uncommitted is a valid outcome; the reflected list still stands.
+On the pick, read that submode's file and follow it. On 5 (or any bail), stop cleanly — write nothing.
+
+## 3 — Contextless-first (guided / brainstorm / dump — NOT propose or yesterday)
+Every style except `propose` works **contextless first**: take the user's raw input and an initial
+stab with no past goals/assumptions surfaced (not blindly — pull in context only where genuinely
+pertinent). Reconcile against active goals + open loose ends **after** that first pass, to (a) catch
+anything important being dropped and (b) merge with prior goals so continuity/progress is tracked.
+`propose` and `yesterday` are the deliberate exceptions — both are context-first by definition
+(`yesterday` prints yesterday's context before doing anything else).
+
+**Writes nothing to the goals store directly.** Durable items route through the `new` framework (its
+review gate); today-scoped items commit via `today` (the day store). Both only on the user's
+confirmation.

@@ -1,4 +1,5 @@
 ---
+name: change-review
 description: "Apply whenever making code edits, modifications, or additions. Governs how changes are presented inline with diffs, annotations, and interactive review options. Always active unless suppressed."
 ---
 
