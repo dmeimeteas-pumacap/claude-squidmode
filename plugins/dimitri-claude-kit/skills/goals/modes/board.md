@@ -5,7 +5,10 @@ area progress (live counts) + open thread `## Next` items + drift footer, one vi
 nothing.** This is the hot path — keep the read scoped. Do NOT load `reference.md` here.
 
 ## 1 — Read the store (one file now)
-Read `~/.claude/goals/goals.md` — the single area store. Each `## ` section = an area: metadata line
+Read `~/.claude/goals/goals.md` — the single area store. **Missing or empty file (or no open
+tasks anywhere): still render the box**, with the TODAY block as usual and a single line in the
+areas region — `(no areas yet — create one with /goals new "title", or dump your thoughts with
+/goals dump)` — then the footer. Never error, never render a bare apology instead of the board. Each `## ` section = an area: metadata line
 (`id: … · prio: <n> · review_after: …`), optional `live_progress:` / `thread:` lines, `north-star:`,
 then its task list (`- [ ]` items with `{deadline|this-week|evergreen}` tags and `↻ N` rollovers,
 possibly with `> note` lines beneath).

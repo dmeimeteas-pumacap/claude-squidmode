@@ -7,8 +7,9 @@
   goals.md             # THE single action/planning store: every area + its tasks (format below)
   links.tsv            # junction: area-id <TAB> thread-slug <TAB> relevance
   done/<id>.md         # retired areas, one extracted file each (kept readable)
-  archive-per-area/    # frozen 2026-07-31 migration backup of the old per-area files (read-only)
 ```
+(The author install also carries a frozen `archive-per-area/` migration backup — historical,
+not part of the store contract; a fresh install never has it.)
 
 An AREA (= what used to be called a goal) is a `## ` section of `goals.md`: a tag + optional
 north-star + its own list of actionable tasks. **Tasks live HERE, not in threads** — threads are

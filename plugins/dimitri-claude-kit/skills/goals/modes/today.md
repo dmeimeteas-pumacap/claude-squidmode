@@ -30,6 +30,9 @@ day" — the verbs in step 5).
   (sub-items get their own numbers). Always render the numbers — they are what "done #n" ticks.
 - The store may carry extra sections (Focus window, Status) from earlier tooling — preserve them if
   present, never require them.
+- **Empty sections render honestly:** a plan with a primary but empty `## Musts` shows just the
+  primary + `(no musts declared — "add <task>" appends one)`; never invent placeholder items and
+  never treat an empty section as a broken store.
 - The store holds ONE day. Setting a new day's plan overwrites it (no history archive;
   `plan-yesterday` documents the recovery path).
 
@@ -43,8 +46,8 @@ Read `~/.claude/accountability/today.md`.
 
 ## 2 — Generate today's plan (only when none is set)
 If invoked from a plan submode, you already have the distilled primary + musts — skip to step 3.
-Otherwise run the **pick**, the coach loop from the redesign (spec:
-`plans/2026-07-goal-tracking-redesign.md`):
+Otherwise run the **pick**, the coach loop (this section IS the spec — the author-side plan file it
+came from does not ship):
 
 1. **Read the areas.** `goals.md` open tasks, prio order, with timeliness tags (`{deadline:…}` due
    soon and `{this-week}` first), `↻ N` rollovers, and any live count from the last

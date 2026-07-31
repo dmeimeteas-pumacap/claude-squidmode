@@ -16,10 +16,12 @@ design.
 
 This file is a **thin router**. It resolves the mode, then loads ONLY that mode's instructions so a
 routine board pull does not drag in every mode's interview logic. Base directory:
-`~/.claude/skills/goals`.
+`~/.claude/skills/goals` (installed as a plugin: `${CLAUDE_PLUGIN_ROOT}/skills/goals` — resolve
+mode files against the plugin root first when the env var is set).
 
-Design source of truth: `~/.claude/plans/2026-07-goal-tracking-redesign.md` (the 2026-07 area-model
-redesign; supersedes `2026-06-goal-orientation-layer.md`).
+Design source of truth: the 2026-07 area-model redesign (author-side spec
+`plans/2026-07-goal-tracking-redesign.md`; not shipped with the kit — this file and
+`reference.md` are self-sufficient).
 
 ## When to invoke
 

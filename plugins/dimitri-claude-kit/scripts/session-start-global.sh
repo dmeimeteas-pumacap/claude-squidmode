@@ -540,23 +540,23 @@ if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ] && [ "$FRESH
 The latest EOD synthesis (${EOD_RECAP_DATE:-none}) predates the prior workday. Before addressing the
 user's first message, run the \`eod\` skill for ${PRIOR_WORKDAY} to generate that day's recap and
 check for uncaptured sessions, then
-summarize it in one short paragraph and remind the user to run \`/goals\` to set today's goals and
-plan. After the recap is shown, write \`${TODAY}\` to \`.last-orientation\` (UTF-8, no BOM) so this
-does not re-fire this session.
+summarize it in one short paragraph and remind the user to run \`/today\` to plan the day (and
+\`/goals\` to review the standing areas). After the recap is shown, write \`${TODAY}\` to
+\`.last-orientation\` (UTF-8, no BOM) so this does not re-fire this session.
 "
 fi
 
 # First-session call to action. The recap above shows where you left off; the day's
-# plan is yours to set, so nudge /goals (replaces the old morning-brief warning).
+# plan is yours to set, so nudge /today (the DAY door since the 2026-07-31 two-door split).
 # Appending to BANNER_CONTENT also forces the systemMessage branch below even with no
 # threads, so the nudge still shows on a thread-less first session. Suppressed for a fresh
-# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /goals prompt with no context yet.
+# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /today prompt with no context yet.
 if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$FRESH_USER" != "1" ]; then
   _W_RESET=$'\033[0m'
   _W_ACCENT=$'\033[38;2;177;185;249m'
   _W_DIM=$'\033[2m'
   _W_NL=$'\n'
-  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ Run /goals${_W_RESET}${_W_DIM} to set today's goals and plan for the day${_W_RESET}${_W_NL}"
+  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ Run /today${_W_RESET}${_W_DIM} to plan the day (standing areas: /goals)${_W_RESET}${_W_NL}"
 fi
 
 # Continuity-janitor drift surface: one dim line when the detector has cached findings.
@@ -579,7 +579,7 @@ if [ -f "$OWED_FILE" ] && ! { [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_F
   OWED_OPEN=$(grep -c '^- \[ \]' "$OWED_FILE" 2>/dev/null || true)
   if [ -n "$OWED_OPEN" ] && [ "$OWED_OPEN" -gt 0 ] 2>/dev/null; then
     _O_RESET=$'\033[0m'; _O_DIM=$'\033[2m'; _O_NL=$'\n'
-    BANNER_CONTENT="${BANNER_CONTENT}${_O_NL}  ${_O_DIM}─ ${OWED_OPEN} owed loose end(s) - see owed-items.md or /current${_O_RESET}${_O_NL}"
+    BANNER_CONTENT="${BANNER_CONTENT}${_O_NL}  ${_O_DIM}─ ${OWED_OPEN} owed loose end(s) - see owed-items.md or the /goals board${_O_RESET}${_O_NL}"
   fi
 fi
 

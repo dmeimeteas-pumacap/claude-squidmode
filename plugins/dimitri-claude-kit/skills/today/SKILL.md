@@ -9,12 +9,15 @@ argument-hint: "[show | done <n> | undone <n> | add \"<task>\"]"
 # Today (the DAY door)
 
 One place for "what am I doing today and how am I tracking." Behavior lives in the goals skill's
-`today` mode file so the two doors share one store discipline — read
-`~/.claude/skills/goals/modes/today.md` with the Read tool and follow it verbatim.
+`today` mode file so the two doors share one store discipline. The mode file is at
+`~/.claude/skills/goals/modes/today.md` (installed as a plugin:
+`${CLAUDE_PLUGIN_ROOT}/skills/goals/modes/today.md` — try that first when the env var is set) —
+read it with the Read tool and follow it verbatim.
 
 Do this now:
 1. Resolve `<DATE>` (the `currentDate` system-reminder if present, else `date +%Y-%m-%d`).
-2. Read `~/.claude/skills/goals/modes/today.md` and follow it. Treat any text after `/today` as the
-   trailing argument (`show` default; `done <n>` / `undone <n>` / `add` are its step-5 verbs).
+2. Read the `goals/modes/today.md` mode file (path resolution above) and follow it. Treat any text
+   after `/today` as the trailing argument (`show` default; `done <n>` / `undone <n>` / `add` are
+   its step-5 verbs).
 
 Do not reimplement the logic here. The single source of truth is `modes/today.md`.
