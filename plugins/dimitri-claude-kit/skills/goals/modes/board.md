@@ -30,8 +30,10 @@ Scope by argument:
 If an area carries a `live_progress:` line (`` `cmd` → `pattern` ``), get its live count from the
 shared detector rather than re-running commands ad hoc:
 ```
-powershell -NoProfile -File "%USERPROFILE%\.claude\janitor\detect-drift.ps1" -Quiet
+powershell -NoProfile -File "%USERPROFILE%\.claude\janitor\detect-drift.ps1" -ClaudeDir "%USERPROFILE%\.claude" -Quiet
 ```
+(Plugin install with no `janitor\` copy: run `${CLAUDE_PLUGIN_ROOT}/scripts/detect-drift.ps1`
+with the same `-ClaudeDir`. Neither present → skip live counts silently.)
 then read the `live` array from `~/.claude/janitor/drift-latest.json` (`{goal, ok, num, den, pct}`).
 Use the LIVE count in the area's meta tag and the recommendation — it overrides any number in task
 text. Display-only. If `ok:false` (or the detector is absent — then run the area's cmd inline as

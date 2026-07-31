@@ -1,5 +1,5 @@
 {
-  "description": "Continuity hooks: session-start thread briefing + expand-keyword prompt expansion.",
+  "description": "Continuity hooks: session-start thread briefing + expand-keyword prompt expansion + mid-session staleness check (passive freshness layer, v0.1.6.1).",
   "hooks": {
     "SessionStart": [
       {
@@ -21,6 +21,13 @@
             "command": "cmd.exe",
             "args": ["/c", "${CLAUDE_PLUGIN_ROOT}/scripts/run-bash-hook.cmd", "expand-prompt.sh"],
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "powershell",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${CLAUDE_PLUGIN_ROOT}/scripts/staleness-check.ps1"],
+            "timeout": 15,
+            "statusMessage": "Checking store freshness"
           }
         ]
       }

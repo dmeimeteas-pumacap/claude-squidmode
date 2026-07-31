@@ -26,9 +26,12 @@ if (-not $Version) {
 }
 
 # --- ALLOWLIST (executable source of truth; mirrors PACKAGE-MANIFEST.md) -------------------
-$ShipSkills = @('catchup','catchupall','change-review','document-process',
-  'document-section','eod','eow','goals','grill-me','log','logall','skill-builder','scrutinize','today','tutorial')
-$ExcludeSkills   = @('maystreet-pull','test-safety-audit','document-overall')   # coupled/local -- never ship. (today ships since v0.1.6: the DAY door, CLI-free. update-statuses/current/task-tracker skills deleted 2026-07-31, folded into reconcile//goals//today.)
+$ShipSkills = @('catchup','catchupall','change-review','deepclean','document-process',
+  'document-section','eod','eow','goals','grill-me','log','logall','reconcile','skill-builder','scrutinize','today','tutorial')
+$ExcludeSkills   = @('maystreet-pull','test-safety-audit','document-overall')   # coupled/local -- never ship. (today ships since v0.1.6: the DAY door, CLI-free. reconcile+deepclean ship since v0.1.6.1 with the janitor engine. update-statuses/current/task-tracker skills deleted 2026-07-31, folded into reconcile//goals//today.)
+# Janitor engine (v0.1.6.1): shipped into the plugin scripts dir; the staleness hook in hooks.json
+# runs from there, and skills fall back to ${CLAUDE_PLUGIN_ROOT}/scripts when ~/.claude/janitor is absent.
+$ShipJanitor = @('detect-drift.ps1','staleness-check.ps1')
 $ShipCommands    = @('theme.md')
 $ShipHooks       = @('session-start-global.sh','expand-prompt.sh')
 $BootstrapAssets = @(
@@ -118,6 +121,12 @@ function Sync-Hooks {
     if ($c -match [regex]::Escape('$HOOK_DIR/..')) { throw "Hook '$h' still resolves CLAUDE_DIR from BASH_SOURCE -- D1 patch did not apply (source line changed?)" }
     Write-NoBom (Join-Path $destRoot $h) $c
   }
+  # janitor engine (v0.1.6.1): ships beside the hook scripts; ASCII/BOM-less by policy already
+  foreach ($j in $ShipJanitor) {
+    $src = Join-Path $ClaudeDir "janitor/$j"
+    if (-not (Test-Path $src)) { throw "Allowlisted janitor script '$j' not found at $src" }
+    Copy-Item $src (Join-Path $destRoot $j) -Force
+  }
   # copy the hand-maintained hooks.json + stamp the plugin-side version marker (B4)
   Copy-Item (Join-Path $RepoRoot "$PluginRel/hooks/hooks.json") (Stage-Path "$PluginRel/hooks/hooks.json") -Force
   # Ship the Git Bash wrapper VERBATIM (no LF conversion -- cmd.exe needs CRLF). hooks.json invokes
@@ -125,7 +134,7 @@ function Sync-Hooks {
   # It rides in the package, so `claude plugin update` re-ships it intact (no in-place patch to wipe).
   Copy-Item (Join-Path $RepoRoot "$PluginRel/scripts/run-bash-hook.cmd") (Join-Path $destRoot 'run-bash-hook.cmd') -Force
   Write-NoBom (Join-Path $destRoot '.kit-version') $Version
-  $Report.Add("hooks: $($ShipHooks -join ', ') (D1-patched) + run-bash-hook.cmd; .kit-version=$Version")
+  $Report.Add("hooks: $($ShipHooks -join ', ') (D1-patched) + run-bash-hook.cmd + janitor [$($ShipJanitor -join ', ')]; .kit-version=$Version")
 }
 
 function Sync-BootstrapAssets {
