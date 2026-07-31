@@ -561,7 +561,7 @@ fi
 
 # Continuity-janitor drift surface: one dim line when the detector has cached findings.
 # Reads ONLY the cached JSON (no powershell spawn at startup); the "as of" timestamp makes a
-# stale cache self-evident. Suppressed on the first-session recovery path (/goals owns the CTA there).
+# stale cache self-evident. Suppressed on the first-session recovery path (/today owns the CTA there).
 DRIFT_JSON="$CLAUDE_DIR/janitor/drift-latest.json"
 if [ -f "$DRIFT_JSON" ] && ! { [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ]; }; then
   DRIFT_TOTAL=$(grep -o '"total"[^0-9]*[0-9]\+' "$DRIFT_JSON" | head -1 | grep -o '[0-9]\+$')

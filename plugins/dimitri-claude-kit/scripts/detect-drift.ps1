@@ -3,13 +3,13 @@
   detect-drift.ps1 - continuity janitor detector (v1, REPORT-ONLY).
 .DESCRIPTION
   Deterministic scan of the ~/.claude continuity stores (goals, threads, INDEX, links.tsv).
-  Writes janitor/drift-latest.json (the single drift source consumed by /current, the /janitor
-  reconciler, and the session-start banner) + appends a one-line run record to janitor/drift-log.md.
+  Writes janitor/drift-latest.json (the single drift source consumed by the /goals board, the
+  /reconcile skill, the staleness hook, and the session-start banner) + appends a one-line run
+  record to janitor/drift-log.md.
 
-  v1 contract: this script WRITES NOTHING to the stores. It only classifies drift and writes the
-  two janitor artifacts. "AUTO-FIX class" findings are DETECTED and reported, but the headless
-  fixer/writer is deferred (see the janitor plan); fixes are applied in-session by the /janitor
-  skill via delegation to /log and /goals modes.
+  Contract: this script WRITES NOTHING to the stores. It only classifies drift and writes the
+  two janitor artifacts. "AUTO-FIX class" findings are DETECTED and reported; fixes are applied
+  in-session by the /reconcile skill via delegation to /log and /goals modes.
 
   General-cleanliness note: v1 covers the continuity stores. New cleanliness categories (promoted-
   draft cruft, orphaned plans, memory-index hygiene, etc.) are added later simply as new finding
@@ -60,7 +60,7 @@ $ARROW         = [char]0x2192   # the cmd->pattern separator on live_progress li
 if (-not (Test-Path $JanitorDir)) { New-Item -ItemType Directory -Path $JanitorDir -Force | Out-Null }
 
 $findings = New-Object System.Collections.Generic.List[object]
-$liveResults = New-Object System.Collections.Generic.List[object]   # per-goal live_progress counts, for /current
+$liveResults = New-Object System.Collections.Generic.List[object]   # per-area live_progress counts, for the /goals board
 function Add-Finding([string]$cls, [string]$kind, [string]$store, [string]$target, [string]$sev, [string]$detail, [string]$mode) {
     $findings.Add([pscustomobject]@{
         id = ("{0}:{1}" -f $kind, $target); class = $cls; kind = $kind; store = $store

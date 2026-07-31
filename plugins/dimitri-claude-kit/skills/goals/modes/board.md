@@ -110,10 +110,12 @@ whole). This box layout is the STANDARD board output — always use it, not a ba
   counts match.
 
 ## 8 — Drift footer + offers (absorbed from /current)
-Read the `findings` array from the `drift-latest.json` refreshed in step 1b (same run, so counts
-agree). If `counts.total > 0`, print a short **drift** block under the box — one line per finding,
-grouped (cap ~5 lines; if more, show the count + the top few) — and point at the fixer:
-`Resolve drift → /reconcile.` If `counts.total == 0`, omit the block.
+Read the `findings` array from `~/.claude/janitor/drift-latest.json` — the CACHE (step 1b only
+refreshes it when a live_progress area forced a run; otherwise the staleness hook keeps it within
+~10 min). If `counts.total > 0`, print a short **drift** block under the box — one line per
+finding, grouped (cap ~5 lines; if more, show the count + the top few), with the report's
+`generated` timestamp so the cache age is visible — and point at the fixer:
+`Resolve drift → /reconcile.` If `counts.total == 0` (or the file is absent), omit the block.
 
 ## 9 — Footer (mode discovery)
 Last line, so modes stay discoverable (bare `/goals` is no longer a menu):

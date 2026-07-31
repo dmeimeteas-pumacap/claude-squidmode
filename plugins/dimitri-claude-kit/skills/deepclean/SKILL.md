@@ -29,8 +29,11 @@ Never propose deleting or moving harness-managed state. Treat these as read-only
 `projects/`, `file-history/`, `plugins/`, `sessions/`, `shell-snapshots/`, `paste-cache/`,
 `history.jsonl`, `.credentials.json`, `daemon/` keys + `daemon.*`, `.rate-limit-state.json`,
 `policy-limits.json`, `statusline.ps1`, `settings.json`, `settings.local.json`, `themes/`,
-`cache/`, and anything under a `.git/`. If a candidate falls in here, drop it silently — do
-not even surface it.
+`cache/`, `backups/`, `downloads/`, `session-env/`, `.run-from/` (kit-hook state,
+self-pruning by design), `.kit-install-receipt.json` (LOAD-BEARING — the session-start
+FRESH_USER/tutorial gate reads it; deleting it breaks onboarding), `remote-settings.json`,
+`.last-update-result.json`, `.last-*` markers generally, and anything under a `.git/`. If a
+candidate falls in here, drop it silently — do not even surface it.
 
 ## When to invoke
 - `/deepclean` or `/deepclean light` (default) — structural + drift-engine + deterministic
@@ -55,6 +58,9 @@ Run the detector via PowerShell with an explicit root (a relative bash path leav
 ```
 powershell -NoProfile -File "%USERPROFILE%\.claude\janitor\detect-drift.ps1" -ClaudeDir "%USERPROFILE%\.claude" -Quiet
 ```
+(Plugin install: if the `janitor\` copy is absent, run
+`${CLAUDE_PLUGIN_ROOT}/scripts/detect-drift.ps1` with the same `-ClaudeDir` argument; neither
+present → note the engine is unavailable and continue with the structural finders only.)
 Read `janitor/drift-latest.json`. Any store-content findings there are `/reconcile`'s job —
 hand them off, do not act on them here.
 

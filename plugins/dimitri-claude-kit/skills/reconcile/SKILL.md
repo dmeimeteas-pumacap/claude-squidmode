@@ -1,6 +1,6 @@
 ---
 name: reconcile
-description: "Continuity/cleanliness reconciler with two lanes. SYNC lane: detects drift across the ~/.claude stores (goals.md areas, threads, INDEX, links.tsv, tracker sidecar) via the shared detect-drift.ps1 engine and resolves it in-session by delegating to /log and /goals modes; deterministic INDEX fixes apply directly. STATUS-UPDATE lane (absorbed from the retired /update-statuses, 2026-07-31): an interactive digest-driven walk-through truing records to reality — tick done thread/goal items, route uncaptured work, recap. Bare /reconcile asks which lane; `/reconcile sync` or `/reconcile status` skips the question. Use when the user says '/reconcile', 'reconcile my state', 'clean up drift', 'fix the stale state', 'sync threads and goals', 'update my statuses', 'check off what's done', 'true up my records', 'run through my threads', or after the session-start banner / mid-session staleness line reports drift. Companion to the passive freshness layer (scheduled headless detector + prompt-time staleness hook) — that layer detects and surfaces; THIS skill writes. NOT /deepclean (filesystem janitor), /log (single-effort capture), /eod (day synthesis)."
+description: "Continuity/cleanliness reconciler with two lanes. SYNC lane: detects drift across the ~/.claude stores (goals.md areas, threads, INDEX, links.tsv) via the shared detect-drift.ps1 engine — plus model-side judgment checks incl. tracker-vs-goals lag via the day sidecar — and resolves it in-session by delegating to /log and /goals modes; deterministic INDEX fixes apply directly. STATUS-UPDATE lane (absorbed from the retired /update-statuses, 2026-07-31): an interactive digest-driven walk-through truing records to reality — tick done thread/goal items, route uncaptured work, recap. Bare /reconcile asks which lane; `/reconcile sync` or `/reconcile status` skips the question. Use when the user says '/reconcile', 'reconcile my state', 'clean up drift', 'fix the stale state', 'sync threads and goals', 'update my statuses', 'check off what's done', 'true up my records', 'run through my threads', or after the session-start banner / mid-session staleness line reports drift. Companion to the passive freshness layer (scheduled headless detector + prompt-time staleness hook) — that layer detects and surfaces; THIS skill writes. NOT /deepclean (filesystem janitor), /log (single-effort capture), /eod (day synthesis)."
 user-invocable: true
 disable-model-invocation: false
 argument-hint: "[sync [<finding-kind>|<slug>] | status]"
@@ -124,10 +124,14 @@ work, or an end-of-day close. **Consumer of the `/eod` digest, never a re-scanne
 transcripts.**
 
 ### Step 0 — Digest freshness
-Read `~/.claude/session-notes/eod-latest.md`. Absent → run `/eod` to generate it. Stale (thread
-files or non-home-project JSONLs newer than it) → refresh via `/eod`. Nothing changed since the
-last digest → warn once ("little to reconcile — run anyway?"), let the user abort. The digest is
-the prep-sheet for all stations.
+Read `~/.claude/session-notes/eod-latest.md`. `/eod` is user-invoked only
+(`disable-model-invocation`), so the model cannot generate the digest itself:
+- **Absent** → ask the user to type `/eod`, then continue when it lands; if they decline, run the
+  stations from thread `## Log` Did-lines + the live session alone and SAY the digest was skipped.
+- **Stale** (thread files or non-home-project JSONLs newer than it) → same ask; a stale digest may
+  still be used if the user prefers, named as stale.
+- **Nothing changed since the last digest** → warn once ("little to reconcile — run anyway?"), let
+  the user abort. The digest is the prep-sheet for all stations.
 
 ### Station 1 — Done check-offs (threads)
 Cross-reference open thread `## Next` items against the digest + `## Log` Did lines. Candidates

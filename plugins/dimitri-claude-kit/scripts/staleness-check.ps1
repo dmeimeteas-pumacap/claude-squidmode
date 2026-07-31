@@ -3,10 +3,10 @@
   staleness-check.ps1 - UserPromptSubmit hook: mid-session staleness surfacing (read-only).
 .DESCRIPTION
   Part of the passive freshness layer (see skills/reconcile/SKILL.md). Runs on every prompt
-  submit, so it must stay fast: it READS ONLY - the store scan is a handful of LastWriteTime
-  checks plus one small JSON read. The heavy lifting (running live_progress commands, drift
-  classification) belongs to detect-drift.ps1, kept fresh by the ClaudeDriftDetect scheduled
-  task - never run it from here.
+  submit, so it must stay fast: the store scan is a handful of LastWriteTime checks plus one
+  small JSON read. The heavy lifting (running live_progress commands, drift classification)
+  belongs to detect-drift.ps1 - never run it INLINE from here (the detached spawn below is the
+  one sanctioned refresh path).
 
   Reports, at most once per change-set per session (stamped in janitor/staleness-seen.json):
     1. store files modified since this session last looked (another conversation moved state), and
@@ -54,7 +54,7 @@ $firstCall = ($null -eq $mine)
 if ($firstCall) {
     # Baseline = now. The SessionStart banner already covered state at open; this hook only
     # reports what changes AFTER the session is underway.
-    $mine = [pscustomobject]@{ lastSeen = $nowIso; lastDrift = -1; touched = $nowIso }
+    $mine = [pscustomobject]@{ lastSeen = $nowIso; lastDrift = -1; lastDriftIds = $null; touched = $nowIso }
 }
 $lastSeen = [datetime]$mine.lastSeen
 
@@ -75,16 +75,24 @@ if (-not $firstCall) {
     }
 }
 
-# --- 2. drift count changed since last reported ---
+# --- 2. drift finding-SET changed since last reported. Keyed on the sorted finding IDs, not
+#     the count: a change-set that swaps findings at the same count must still fire. And a
+#     missing/unreadable report is NOT a clean report - leave the prior stamp untouched so the
+#     first real report still gets announced. ---
 $driftNote = $null
 try {
-    $dj = Get-Content (Join-Path $ClaudeDir 'janitor\drift-latest.json') -Raw | ConvertFrom-Json
-    $total = [int]$dj.counts.total
-    if ($total -ne [int]$mine.lastDrift -and $total -gt 0) {
-        $kinds = ($dj.findings | ForEach-Object { $_.kind } | Select-Object -Unique) -join ', '
-        $driftNote = ('{0} drift finding(s) [{1}] as of {2}' -f $total, $kinds, $dj.generated)
+    $djPath = Join-Path $ClaudeDir 'janitor\drift-latest.json'
+    $dj = if (Test-Path $djPath) { Get-Content $djPath -Raw | ConvertFrom-Json } else { $null }
+    if ($null -ne $dj -and $null -ne $dj.counts) {
+        $total = [int]$dj.counts.total
+        $ids = (@($dj.findings | ForEach-Object { [string]$_.id }) | Sort-Object) -join '|'
+        if ($total -gt 0 -and $ids -ne [string]$mine.lastDriftIds) {
+            $kinds = ($dj.findings | ForEach-Object { $_.kind } | Select-Object -Unique) -join ', '
+            $driftNote = ('{0} drift finding(s) [{1}] as of {2}' -f $total, $kinds, $dj.generated)
+        }
+        $mine.lastDrift = $total
+        $mine | Add-Member -NotePropertyName lastDriftIds -NotePropertyValue $ids -Force
     }
-    $mine.lastDrift = $total
 } catch {}
 
 # --- persist seen-state (advance lastSeen only when we reported, so unnoticed changes re-fire) ---

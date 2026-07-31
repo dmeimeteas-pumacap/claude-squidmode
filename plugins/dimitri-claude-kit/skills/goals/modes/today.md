@@ -66,12 +66,16 @@ came from does not ship):
    repeat the observation.
 3. **Elicit weights, coach-style.** Each pick gets light / medium / heavy = 1 / 2 / 3. Propose what
    looks heavier and probe ("how does this actually feel / how long really") — cold self-assignment
-   underweights to pile more on.
-4. **Soft budget ~5 points — FEEDBACK ONLY, never enforcement.** Over budget → say so once, with
-   reality attached: fixed obligations, the midday-lull energy pattern, rollover counts (a task at
-   ↻ 3+ needs a smaller slice, not another re-roll). Then commit **exactly what the user chose** —
-   never trim, refuse, or re-ask. The budget exists to make over-commitment visible, not to gate
-   the plan; a user who takes 8 points with eyes open has been coached, and that is the whole job.
+   underweights to pile more on. **Weights are deliberately EPHEMERAL** — they live in this
+   conversation only and are never written to the store; each morning's pick re-coaches them
+   fresh. Do not add a weight field to the store format.
+4. **Soft budget ~5 points — FEEDBACK ONLY, never enforcement.** Over budget → say so **once per
+   declaration** (a re-weight of the same picks in the same session gets ONE combined comment, not
+   one per attempt — same no-nagging rule as the sub-item observation), with reality attached:
+   fixed obligations, the midday-lull energy pattern, rollover counts (a task at ↻ 3+ needs a
+   smaller slice, not another re-roll). Then commit **exactly what the user chose** — never trim,
+   refuse, or re-ask. The budget exists to make over-commitment visible, not to gate the plan; a
+   user who takes 8 points with eyes open has been coached, and that is the whole job.
 5. Offer the result for a one-reply confirm/edit (manual-first — do not declare what the user did
    not pick).
 
