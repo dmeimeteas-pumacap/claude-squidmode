@@ -76,6 +76,28 @@ This is the standing "always aware of the other" behavior — no "want me to pul
 co-evolving siblings (that prompt is for plain `related:` links); state briefly that you're carrying
 the sibling's context. `coevolves_with` is symmetric — reading either sibling loads the other.
 
+## State questions sweep live sessions, not just the thread
+
+A thread file records what was WRITTEN. A concurrent conversation that has not logged yet is invisible
+in it, so briefing straight off `## Where I left off` can hand back a confidently stale answer. Before
+briefing, run a cheap freshness sweep on the resolved thread:
+
+1. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** the thread's
+   `last_touched` (subagent files under `*/subagents/` belong to their parent session).
+2. Keyword-grep them for the thread's `topic`/`tags`/title terms and rank.
+3. Read the top candidates, or name them as **unswept** in the briefing. An unread candidate is never
+   reported as covered.
+4. Skip any session already listed in `threads/.logall-processed.tsv`.
+
+Scale it to the ask. A day-to-day "where was I" on a thread touched today needs no sweep. Escalate it
+whenever the question is about **state** rather than rationale ("what is left", "where are we", "did we
+ever resolve X", "is that done"), and whenever `last_touched` is older than the newest session file.
+
+If the sweep finds real unlogged work, **hand it to `/log`** rather than briefing around it: say what
+was found, name the thread, and delegate. `/catchup` does not write the capture itself (see Guardrails);
+leaving a found gap uncaptured is the failure mode to avoid, because the finding otherwise dies with
+this conversation.
+
 ## Briefing
 
 After reading, brief in a few sentences, not a file dump:
@@ -84,6 +106,8 @@ After reading, brief in a few sentences, not a file dump:
 - The next physical action (`## Next`).
 - Any **correlated** threads (from `related:`), offered as "want me to also pull up X?". (For
   `coevolves_with` siblings, don't offer — you've already lazily loaded their Tier 0; just note it.)
+- Whether the freshness sweep ran, and any sessions left **unswept**. Say "swept, nothing newer" or
+  name the UUIDs you did not read. Never let a brief imply completeness the sweep did not establish.
 
 Then offer the verbose escape hatch: "Say `view` to see the complete detail." On `view`,
 escalate the read one tier if needed (Tier 0 → Tier 1) and print, **verbatim and untruncated**: the
@@ -130,6 +154,10 @@ Print it once, at the very bottom. Skip it in date/`eod` mode (no single target 
   regenerating that thread's INDEX row. It writes nothing else — no new state capture, no
   `## Decisions`, no memory. Capturing fresh state is still `/log`'s job. (It may also *invoke*
   `eod`, which writes only its own synthesis file.)
+- **The freshness sweep is a READ, and its follow-up is a delegation.** Sweeping live sessions adds no
+  write; if it finds unlogged work, `/catchup` hands off to `/log` rather than capturing it inline, so
+  the one-write rule above still holds. Reporting the finding and stopping is not acceptable, but nor
+  is writing the capture here.
 - Respect the tier budget — do not load Tier 2 unless explicitly asked or genuinely needed.
 - If no thread matches a fuzzy query, say so and offer the Active table or a date search rather
   than fabricating a match.

@@ -47,6 +47,12 @@ headless.
   anything touching thread/goal content gets a single one-reply confirm before delegating.
 - **Never auto-rewrite narrative.** A `snapshot_trails_live` finding resolves by offering a normal
   `/log` capture, not a direct edit.
+- **A sweep that finds unlogged work must PERSIST it, not just report it.** Surfacing relevant
+  unlogged state in-session and moving on is a silent regression: the finding dies with the
+  conversation and the next session re-derives it. When the live-session sweep (Step 2) turns up real
+  work that no store reflects, route it through `/log` in the same run (Did/Thinking/Next + a
+  `last_touched` bump), without waiting to be asked. Confirm the target thread, never whether to
+  capture at all.
 
 ## Process
 ### Step 1 — Refresh + read the report
@@ -62,7 +68,24 @@ guarantees the report reflects this second.) Read `~/.claude/janitor/drift-lates
 `<kind>`/`<slug>` arg was given, filter to it.
 
 ### Step 2 — Layer judgment (model-side checks the detector leaves open)
-Using live conversation + file context, additionally look for the judgment-only classes:
+Using live conversation + file context, additionally look for the judgment-only classes.
+
+**Do the live-session sweep FIRST** (it is the one class the detector structurally cannot see):
+- `unswept_live_session` — the detector only sees state that was WRITTEN to the stores. A concurrent
+  conversation that has not logged yet is invisible to every deterministic check, so a report reading
+  `counts.total == 0` does NOT mean the stores match reality. Sweep it explicitly:
+  1. For each active thread, take its `last_touched`.
+  2. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** that date
+     (subagent transcripts under `*/subagents/` count as part of their parent session, not separately).
+  3. Keyword-grep the candidates for the thread's `topic`/`tags`/title terms to rank them.
+  4. Read the ranked candidates, or **explicitly flag them as unswept** if you do not. Never let an
+     unread candidate pass as covered.
+  Emit a finding naming the thread, the session UUID, and what the session appears to hold that the
+  thread does not. A session already recorded in `threads/.logall-processed.tsv` is not a candidate.
+  **Never answer a state question ("what is left", "where are we", "did we resolve X") from
+  in-context memory alone, and never from the detector report alone.**
+
+Then the remaining judgment-only classes:
 - `next_item_looks_done` — a thread `## Next` or goals.md task done in reality but still `[ ]`.
   When a fresh `eod-latest.md` digest exists, use its "What moved" / Did lines as the evidence
   source (never invent completions; digest-in-progress items are NOT candidates).
@@ -85,6 +108,10 @@ Do not invent drift — cite the file text.
 is info-overload-sensitive — keep it scannable; do not paste file bodies.
 
 ### Step 4 — Apply, by class
+- **`unswept_live_session`:** confirm the target thread (not whether to capture), then `/log` the
+  found work into it. If several sessions hit one thread, prefer `/logall` so each is walked
+  individually and the processed ledger is stamped. Candidates you chose not to read are reported as
+  unswept in Step 5, never omitted.
 - **`index_*` (auto-fix, derived):** regenerate the affected INDEX row(s) from the thread file(s) —
   row format `| [[slug]] | project | prio | MM-DD(last_touched) | first-sentence-of-Where-I-left-off |`.
   `malformed_index_row` → split the merged line; `index_wrong_table` → move the row. Apply +
@@ -113,7 +140,8 @@ is info-overload-sensitive — keep it scannable; do not paste file bodies.
 
 ### Step 5 — Re-emit + report
 Re-run `detect-drift.ps1 -Quiet` so the report (and the banner/hook count) reflects the fixes.
-Report applied vs deferred.
+Report applied vs deferred, **plus any live sessions left unswept** (UUID + why). A clean report with
+unswept sessions behind it is a partial result, so say so rather than declaring the stores clean.
 
 ---
 
@@ -180,6 +208,13 @@ The passive layer NEVER writes stores — it detects and surfaces; resolution st
 (confirm-gated), except derived INDEX fixes which this skill auto-applies when run. When the hook's
 note appears mid-conversation, re-read the named store file(s) before answering anything that
 depends on them — that is the "aggressively current" contract.
+
+**Known blind spot (the reason for the `unswept_live_session` sweep).** All three pieces key off
+**store files**, so they only see state a conversation has already WRITTEN. A live session holding
+real unlogged work moves no store file and therefore triggers nothing: no drift count, no staleness
+note, no banner change. Silence from the passive layer is evidence that nothing was *written*, never
+evidence that nothing *happened*. Any state question has to sweep the live sessions directly
+(SYNC lane Step 2), which is a model-side read, not something the detector can be taught.
 
 ## Versioning
 - New cleanliness categories: add a finding `kind` in `detect-drift.ps1` + a Step-4 handling line.

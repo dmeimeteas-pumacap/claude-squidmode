@@ -26,8 +26,12 @@ day" — the verbs in step 5).
 ```
 
 - One `{glyph}` per item (the board legend: `▸ ★ ● ◐ ◇ ○ ▽ ▲`); the primary is always `{★}`.
-- **Item numbers are positional**: 1 = the Primary item, then every checkbox line in file order
-  (sub-items get their own numbers). Always render the numbers — they are what "done #n" ticks.
+- **Item ids are positional, and sub-items are LETTERED under their parent**: top-level items take
+  numbers in file order (1 = the Primary item, then each top-level Musts line); a parent's children
+  take a BARE `a`, `b`, `c`… restarting at `a` under every parent — render them as just `a.`, not
+  `1a`/`3a`. The parent number is already visually above them, and the user names the parent when
+  referring to a letter. Sub-items never consume a top-level number. Always render the ids — they
+  are what "done #n" ticks.
 - The store may carry extra sections (Focus window, Status) from earlier tooling — preserve them if
   present, never require them.
 - **Empty sections render honestly:** a plan with a primary but empty `## Musts` shows just the
@@ -86,7 +90,7 @@ the glyphs must survive). Preserve any parent/child nesting the user gives.
 **Then write the goal-map sidecar** `~/.claude/accountability/today-goalmap.tsv` (TAB-separated,
 UTF-8 no BOM, overwritten with each new plan):
 ```
-<item-n>	<area-id>	<verbatim goals.md task line text (trimmed, no checkbox)>
+<item-id>	<area-id>	<verbatim goals.md task line text (trimmed, no checkbox)>
 ```
 One row per pick that came from an area (slices map to their parent task; unlinked one-offs get no
 row). This sidecar is what makes the tick write-back (step 5) and `/reconcile`'s tracker-vs-goals
@@ -108,7 +112,8 @@ their own boolean here, not detection logic.
 
 ## 5 — Verbs + the tick WRITE-BACK
 Conversational verbs, all direct edits to the store:
-- **"done #n" / "check off …"** → flip that item's `- [ ]` → `- [x]`. Then look up item `n` in
+- **"done #n" / "check off …"** → flip that item's `- [ ]` → `- [x]` (`n` is a top-level number, or a
+  parent number plus a letter — the user supplies both, e.g. "3, b"). Then look up that id in
   `today-goalmap.tsv`; if mapped AND the tick completes the actual goals.md task (not just a slice —
   ask when ambiguous, default = slice, parent stays open), flip that task in
   `~/.claude/goals/goals.md` (checkbox only, never task text). Refresh any step-4 mirror.
@@ -122,6 +127,7 @@ Conversational verbs, all direct edits to the store:
 - The sidecar matches goals.md tasks by verbatim line text — if a task is reworded in goals.md
   mid-day, the write-back match fails; report it and flip by hand instead of guessing.
 - PowerShell `-Encoding utf8` writes a BOM; use the Edit/Write tools for store edits.
-- Item numbers shift when items are added — always re-render the numbered list after any edit so
-  the user ticks against current numbers.
+- Item ids shift when items are added — always re-render the list after any edit so the user ticks
+  against current ids. Adding a sub-item only reletters its own parent's children; adding a
+  top-level item renumbers the top level below it.
 - Never treat an external mirror (e.g. OneNote) as a tick source — the store is the only truth.

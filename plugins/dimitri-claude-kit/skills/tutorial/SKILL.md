@@ -1,6 +1,6 @@
 ---
 name: tutorial
-description: "Interactive first-run onboarding for the Claude kit. Walks a newly-installed user, live and hands-on (not a doc to read), through the core continuity workflow and, if they used Claude elsewhere before, through confirming/migrating that prior setup. Bare `/tutorial` runs the full first-run flow; `/tutorial migrate` jumps straight to the migration router. Use when the user says '/tutorial', 'walk me through this', 'how do I get started', 'I just installed this', 'onboard me', or 'how do I move my old Claude setup over'. NOT for resuming an effort (/catchup), capturing state (/log), or planning the day (/goals)."
+description: "Interactive first-run onboarding for the Claude kit. Walks a newly-installed user, live and hands-on (not a doc to read), through the core continuity workflow and, if they used Claude elsewhere before, through confirming/migrating that prior setup. Bare `/tutorial` runs the full first-run flow; `/tutorial migrate` jumps straight to the migration router. Use when the user says '/tutorial', 'walk me through this', 'how do I get started', 'I just installed this', 'onboard me', or 'how do I move my old Claude setup over'. NOT for resuming an effort (/catchup), capturing state (/log), standing goals and areas (/goals), or planning the day (/today)."
 user-invocable: true
 disable-model-invocation: false
 argument-hint: "[migrate]"
@@ -18,8 +18,13 @@ Base directory: `~/.claude/skills/tutorial` (installed path: `${CLAUDE_PLUGIN_RO
 
 - Teaches **generic Claude Code tooling only**. NEVER reference any firm-specific or private
   knowledge — a separate private variant owns that.
-- Only ever name commands that appear in the **Skill catalog** below, which must itself stay a
-  subset of `PACKAGE-MANIFEST.md`. Never name a command the kit does not ship.
+- Only ever name commands that appear in the **Skill catalog** below, and the catalog must match the
+  skills actually installed beside this file (`${CLAUDE_PLUGIN_ROOT}/skills/`). That directory is the
+  runtime source of truth, because `PACKAGE-MANIFEST.md` lives one level above the plugin root and is
+  therefore NOT delivered to a recipient. Never name a command the kit does not ship.
+- **The rule runs both ways (inverse catalog check).** A catalog row with no installed skill points at
+  a dead command; an installed skill with no catalog row is invisible to onboarding. Both are defects.
+  If the two ever disagree, say so plainly rather than silently trusting the table.
 - Conduct it interactively: do ONE step, then STOP and wait for the user to actually run the
   command before continuing. Never dump all steps at once, and never run the user's commands for
   them — the point is that they do it.
@@ -38,7 +43,8 @@ Base directory: `~/.claude/skills/tutorial` (installed path: `${CLAUDE_PLUGIN_RO
 - "walk me through this", "how do I get started", "I just installed this", "onboard me"
 - "how do I bring my old Claude setup over" → migrate mode
 
-Do NOT trigger for: resuming (`/catchup`), capturing state (`/log`), day-planning (`/goals`).
+Do NOT trigger for: resuming (`/catchup`), capturing state (`/log`), standing areas and goals
+(`/goals`), day-planning (`/today`).
 
 ## Step 1 — Resolve the mode
 | Argument | Mode | Follow |
@@ -111,8 +117,14 @@ Frame the tier first so it's not just a list: "Everything else builds on the thr
 planning on top of it, documenting with it, wrapping up the day around it." Then read the **Skill
 catalog** below: give a ONE-LINE pointer for each `highlight`-tier skill (say what it's for, not
 just its name), invite them to try one, and MENTION in a single clause that the `mention`-tier
-skills exist and that `/help` lists everything. Keep this short — awareness, not a second tutorial.
-Then go to Beat 4.
+skills exist, naming two or three so the clause is concrete. Keep this short — awareness, not a
+second tutorial. Then go to Beat 4.
+
+Two things to state once, because they are invisible otherwise:
+- **`/eod` and `/eow` only run when the user types them.** They are `disable-model-invocation`, so
+  asking Claude to "wrap up the day" will not reach them. If the user wants them, they type them.
+- **`/change-review` is not a command to try.** It is an always-on format that shapes how Claude
+  presents code edits; there is nothing to run.
 
 ## Beat 4 — Continue or wrap up (always offer the choice)
 The tutorial ends at a natural stopping point, but never just stop — hand the user the fork
@@ -130,8 +142,11 @@ off the catalog's `highlight` tier, don't hardcode a fixed sequence.
 
 ## Skill catalog (the extensible registry — EDIT HERE to add a skill)
 Beats 2 and 3 are driven by this table, so onboarding a newly-shipped skill is a one-row edit.
-Rules: (1) every row MUST also be in `PACKAGE-MANIFEST.md` — never list a skill the kit doesn't
-ship; (2) keep the spine tiny (2-3 skills) so Beat 2 stays hands-on, not a firehose; (3) tier
+Rules: (1) every row MUST resolve to something installed — a directory in
+`${CLAUDE_PLUGIN_ROOT}/skills/` or a file in `${CLAUDE_PLUGIN_ROOT}/commands/` (that is where `/theme`
+lives) — and every installed skill should have a row, `tutorial` itself excepted; never list a command
+the kit doesn't ship, and don't leave a shipped one unlisted; (2) keep the spine tiny (2-3 skills) so
+Beat 2 stays hands-on, not a firehose; (3) tier
 meanings: `spine` = taught hands-on in Beat 2, `highlight` = one-line pointer in Beat 3,
 `mention` = named in a single clause only.
 
@@ -139,17 +154,20 @@ meanings: `spine` = taught hands-on in Beat 2, `highlight` = one-line pointer in
 |---|---|---|
 | `/log` | Capture where an effort stands + why (writes a thread). | spine |
 | `/catchup` | Get briefed back on a thread when you return. | spine |
-| `/goals` | Set goals and plan your day above the threads. | highlight |
+| `/goals` | Standing areas and their task lists, plus the status board. | highlight |
+| `/today` | Pick and tick the 3-5 things you're doing today. | highlight |
 | `/document-process` | Generate a README for one project. | highlight |
 | `/document-section` | Document a group of projects at once. | highlight |
-| `/eod` | Synthesize your whole day across efforts. | highlight |
+| `/eod` | Synthesize your whole day across efforts (you type it; Claude can't). | highlight |
+| `/reconcile` | True up the stores when they drift from reality. | mention |
+| `/deepclean` | Filesystem tidy-up of stale files under `~/.claude`. | mention |
 | `/catchupall` | Panoramic view of every active thread. | mention |
-| `/eow` | End-of-week roll-up. | mention |
+| `/eow` | End-of-week roll-up (you type it; Claude can't). | mention |
 | `/grill-me` | Get interrogated on a plan until it holds. | mention |
 | `/scrutinize` | Independent adversarial critique of any subject (plan/product/idea). | mention |
 | `/skill-builder` | Build your own skills. | mention |
 | `/logall` | Sweep sessions you forgot to log. | mention |
-| `/change-review` | Inline diff review format for code edits. | mention |
+| `/change-review` | Always-on: how Claude presents code edits. Nothing to run. | mention |
 | `/theme` | Switch the statusline palette + base theme. | mention |
 
 ## Guardrails
@@ -168,9 +186,16 @@ meanings: `spine` = taught hands-on in Beat 2, `highlight` = one-line pointer in
 - `/tutorial` is only loadable AFTER a Claude Code restart post-install — the entry points say so,
   this skill assumes it's already loaded.
 - The catalog is the single source of truth for what the tutorial names. If a skill is removed from
-  the kit, remove its row here too, or Beat 3 will point at a dead command.
+  the kit, remove its row here too, or Beat 3 will point at a dead command. The reverse also bites:
+  a shipped skill with no row never gets mentioned, which is how `/today`, `/reconcile`, and
+  `/deepclean` stayed invisible after they shipped. Check both directions against
+  `${CLAUDE_PLUGIN_ROOT}/skills/` **and** `${CLAUDE_PLUGIN_ROOT}/commands/` — not every shipped
+  command is a skill (`/theme` is a command file), so checking only `skills/` reports false defects.
+- `PACKAGE-MANIFEST.md` sits at the repo root, ABOVE the plugin, so recipients never receive it. Do
+  not cite it as something the model can check at runtime.
 
 ## Maintenance — adding a skill to onboarding
-1. Ship the skill (it must be in `PACKAGE-MANIFEST.md` + the build allowlist).
+1. Ship the skill (add it to the build allowlist in `build-package.ps1`, and to `PACKAGE-MANIFEST.md`
+   for the repo-side record).
 2. Add one row to the Skill catalog with the right tier. That is the whole change — Beats 2/3 read
    from the table, no prose edits needed.

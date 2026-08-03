@@ -2,7 +2,7 @@
     "name":  "dimitri-claude-kit",
     "displayName":  "Dimitri\u0027s Claude Kit",
     "description":  "Continuity + productivity setup for Claude Code: thread-based logging and catchup, the two-door planning model (goals areas + today day-plan), day synthesis (eod), continuity janitor (reconcile/deepclean), documentation generators, and skill-builder.",
-    "version":  "0.1.6.2",
+    "version":  "0.1.7",
     "author":  {
                    "name":  "Dimitri"
                },
