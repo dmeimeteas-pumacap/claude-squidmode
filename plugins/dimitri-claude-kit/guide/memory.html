@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memory — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--mem)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; Memory</p>
+  <div class="mast">
+    <h1 style="color:var(--mem)">◆ Memory</h1>
+    <p class="sub">Claude starts every session from scratch. These four commands are the only reason
+    your work, decisions, and next steps survive between sessions. <b>A thread is one effort tracked
+    across days</b> — not a to-do list, and not a transcript. If you learn nothing else in the kit,
+    learn <code>/log</code> and <code>/catchup</code>.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html" class="here">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>How the pieces fit <span>One store, two directions.</span></h2>
+  <div class="lostcol">
+    <h3>Writing</h3>
+    <ul>
+      <li><b>/log</b> — you decide what matters, one effort at a time.</li>
+      <li><b>/logall</b> — catch up on sessions you forgot to log at all.</li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>Reading</h3>
+    <ul>
+      <li><b>/catchup</b> — one thread, in depth, with the reasoning.</li>
+      <li><b>/catchupall</b> — every thread, one line each.</li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>Where it lives</h3>
+    <ul>
+      <li><code>~/.claude/threads/active/</code> — one markdown file per effort.</li>
+      <li><code>threads/INDEX.md</code> — the derived dashboard. The thread file always wins.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- =================== /log =================== -->
+<article class="entry" id="log">
+  <h3>/log</h3>
+  <p class="lede f-lede">Capture where an effort stands and <b>why</b>, into a thread.</p>
+
+  <dl class="ex f-forms">
+    <dt>/log</dt><dd>Capture current state into the thread you're working in.</dd>
+    <dt>/log new "title"</dt><dd>Start a new thread. It proposes a name and waits for you to confirm.</dd>
+    <dt>/log micro</dt><dd>One line, for something trivial. Skips the reasoning capture entirely.</dd>
+    <dt>/log auto</dt><dd>Picks the thread for you and marks the guess unconfirmed.</dd>
+    <dt>/log confirm</dt><dd>Clears that unconfirmed marker once you've checked the guess was right.</dd>
+    <dt>/log done</dt><dd>Tick off the Next items you've since finished.</dd>
+    <dt>/log pause &lt;slug&gt;</dt><dd>Park it. Stays readable, drops off the active board.</dd>
+    <dt>/log close &lt;slug&gt;</dt><dd>The effort is finished. Durable conclusions get promoted to memory.</dd>
+    <dt>/log merge &lt;a&gt; into &lt;b&gt;</dt><dd>Two threads turned out to be one effort.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What it writes</h4>
+      <p>Each capture records <b>Did</b> (what changed), <b>Thinking</b> (what was uncertain, what
+      you were betting on) and <b>Next</b> (the intended next action). Real decisions additionally get
+      their own entry with the forcing reason, the alternatives you rejected, and how expensive it
+      would be to reverse.</p>
+      <p>The <b>Thinking</b> half is what makes a cold return work. Outcomes without reasoning read
+      like someone else's notes.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">When to reach for it</h4>
+      <p>When you stop, get interrupted, hit a wall, or decide something you'd have to re-derive
+      later. Not on a timer — logging a session where nothing was decided produces noise.</p>
+      <h4 class="f-not" style="margin-top:11px">When not to</h4>
+      <p>Pure questions and explanations. Nothing was decided and nothing advanced, so there is
+      nothing to resume.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p><b>Decisions and Log are append-only.</b> A superseded decision gets a new dated entry
+      rather than an edit, so the reasoning chain stays readable.</p>
+      <p><b>Where-I-left-off and Next are overwritten</b> every capture. That is intentional and
+      lossless: the previous state is preserved in the Log.</p>
+    </div>
+  </div>
+
+  <div class="warn f-warn"><b>The auto trap.</b> <code>/log auto</code> lets a model guess which thread your
+  work belonged to. Until you run <code>/log confirm</code>, that narrative may be filed under the
+  wrong effort. Those markers pile up quietly — <code>/reconcile</code> now finds them for you.</div>
+</article>
+
+<!-- =================== /catchup =================== -->
+<article class="entry" id="catchup">
+  <h3>/catchup</h3>
+  <p class="lede f-lede">Get briefed on one thread when you return to it. The return trip that makes logging worth doing.</p>
+
+  <dl class="ex f-forms">
+    <dt>/catchup</dt><dd>No argument: shows the active board numbered, and you pick.</dd>
+    <dt>/catchup &lt;slug&gt;</dt><dd>By exact name.</dd>
+    <dt>/catchup 3</dt><dd>By row number from the board.</dd>
+    <dt>/catchup "that cache thing"</dt><dd>Fuzzy. Searches closed threads too, so old work is recoverable.</dd>
+    <dt>/catchup 2026-07-14</dt><dd>Reconstructs a whole day, even from before the thread system existed.</dd>
+    <dt>view</dt><dd>Say this after a briefing for the full untrimmed text.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">It reads in tiers</h4>
+      <p>A months-old thread would flood the conversation if read whole, so it escalates only as
+      needed: current state first, then the entire decision history for a long gap, then the full log
+      only if you ask. Coming back after weeks? You want the decisions — that is where the <i>why</i>
+      lives.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">It is nearly read-only</h4>
+      <p>The one thing it writes is the checkoff prompt at the end, and it does that by handing off to
+      <code>/log done</code> rather than editing anything itself. Capturing fresh state is still
+      <code>/log</code>'s job.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">It checks other conversations</h4>
+      <p>For a question about <b>state</b> ("what's left", "did we resolve that"), it sweeps your
+      other recent sessions rather than trusting the thread file, because a chat that hasn't logged
+      yet is invisible in it. It will tell you what it swept and what it didn't.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for capturing new state — that is <code>/log</code>. Not for a bird’s-eye view of everything at once — that is <code>/catchupall</code>. And not for general questions unrelated to resuming prior work.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- =================== /catchupall =================== -->
+<article class="entry" id="catchupall">
+  <h3>/catchupall</h3>
+  <p class="lede f-lede">Every active thread at once, one line each. The panoramic view.</p>
+  <dl class="ex f-forms">
+    <dt>/catchupall all</dt><dd>The whole board.</dd>
+    <dt>/catchupall top 5</dt><dd>Just the first five.</dd>
+    <dt>/catchupall 2-6</dt><dd>A range. Also accepts a list like <code>1,4,9</code>.</dd>
+    <dt>/catchupall view all</dt><dd>Print-only dump. Renders full detail verbatim without summarising it.</dd>
+  </dl>
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">Use it for</h4>
+      <p>"What do I even have going on." Answering that from memory is how efforts get silently
+      dropped.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">Not for</h4>
+      <p>Depth on one thing. Row numbers here match <code>/catchup</code>'s, so spot the row you care
+      about and switch.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">When to reach for it</h4>
+      <p>When you have lost track of how many efforts are open, or before planning a day, so the picks come from the real board rather than memory.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>Row numbers here match <code>/catchup</code>'s, so a row you spot in this view pulls up the same thread there.</p>
+    </div>
+
+
+  </div>
+</article>
+
+<!-- =================== /logall =================== -->
+<article class="entry" id="logall">
+  <h3>/logall</h3>
+  <p class="lede f-lede">Find every session you never logged and walk them one at a time.</p>
+  <dl class="ex f-forms">
+    <dt>/logall</dt><dd>Walk everything unlogged, interactively.</dd>
+    <dt>/logall eod</dt><dd>Sweep today's unlogged sessions, then chain into the day summary.</dd>
+  </dl>
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">Why it exists</h4>
+      <p>Logging is a habit, and habits lapse. This recovers the gap instead of losing those days.
+      One session often feeds <b>several</b> threads, which is why it walks them individually rather
+      than filing each one somewhere.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">It tracks by session</h4>
+      <p>Coverage is recorded per session id, not per day, so two efforts worked the same afternoon
+      can't hide each other.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for a single effort you know you want to record — use <code>/log</code> directly. Reaching for this when one thread is on your mind means walking every unlogged session to get to it.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>Coverage is tracked per session id, not per day, so two efforts worked the same afternoon cannot mask each other.</p>
+    </div>
+
+
+  </div>
+</article>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.8 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

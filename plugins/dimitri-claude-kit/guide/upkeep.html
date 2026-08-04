@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Upkeep — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--keep)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; Upkeep</p>
+  <div class="mast">
+    <h1 style="color:var(--keep)">● Upkeep</h1>
+    <p class="sub">Two <b>different</b> kinds of tidying that get confused constantly, plus the setup
+    commands. Nothing here runs on a schedule you have to remember — reach for these when something
+    feels off, or when the session banner tells you it is.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html" class="here">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>Records vs files <span>The distinction that keeps these two apart.</span></h2>
+  <div class="lostcol">
+    <h3>/reconcile — the records are wrong</h3>
+    <ul>
+      <li>Content drift: a task done in reality but open in the store.</li>
+      <li>Edits records. Never deletes files.</li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>/deepclean — the files are stale</h3>
+    <ul>
+      <li>Superseded plans, dead drafts, past-due leftovers.</li>
+      <li>Deletes and archives. Never rewrites your records.</li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>Both</h3>
+    <ul>
+      <li>Propose first, act only on your confirmation.</li>
+      <li>Never run headless or unattended.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- =================== /reconcile =================== -->
+<article class="entry" id="reconcile">
+  <h3>/reconcile</h3>
+  <p class="lede f-lede">Make the stores match what actually happened. Two lanes.</p>
+
+  <dl class="ex f-forms">
+    <dt>/reconcile</dt><dd>Asks which lane you want.</dd>
+    <dt>/reconcile sync</dt><dd>Detector-driven: find drift, then fix it.</dd>
+    <dt>/reconcile status</dt><dd>Interactive walk-through: tick what you really did, route what never got captured.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">The sync lane</h4>
+      <p>A deterministic detector finds mechanical drift — a dashboard row whose date lags its thread,
+      a memory file with no index pointer, a goal that has rolled over too many times. Derived things
+      it just fixes; anything touching your actual content it confirms with you first.</p>
+      <p>It never hand-edits append-only history. It applies changes by delegating to
+      <code>/log</code> and <code>/goals</code>, so there is one way each store gets written.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">The status lane</h4>
+      <p>Walks stations: tick finished thread items, tick finished area tasks, route work that never
+      got captured anywhere, then recap. It reads the <code>/eod</code> digest as its prep sheet rather
+      than re-scanning raw transcripts — so if no digest exists it will ask you to type
+      <code>/eod</code> first, and will say plainly if you skip it.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">It sweeps your other conversations</h4>
+      <p>This is the part no file-based check can do. A chat that has real work in it but hasn't logged
+      yet moves <b>no</b> file, so it triggers no drift count and no warning. Silence means nothing was
+      <i>written</i>, never that nothing <i>happened</i>.</p>
+      <p>So it reads your other recent sessions directly, and if it finds unlogged work it captures it
+      rather than just mentioning it. Anything it couldn't get to gets named as unswept.</p>
+    </div>
+  </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for deleting stale <i>files</i> — that is <code>/deepclean</code>. This fixes the content of your records and never removes anything from disk. Also not a day summary: it <i>reads</i> <code>/eod</code>’s digest rather than producing one.</p>
+    </div>
+
+
+  <div class="warn f-warn"><b>It also finds unconfirmed auto-captures.</b> When <code>/log auto</code> guesses
+  which thread your work belonged to, that guess needs a human check. Those markers accumulate
+  invisibly, so the sync lane batches them into one pass for you to confirm or leave open.</div>
+</article>
+
+<!-- =================== /deepclean =================== -->
+<article class="entry" id="deepclean">
+  <h3>/deepclean</h3>
+  <p class="lede f-lede">The filesystem janitor: delete, move, merge, and archive the stale files <code>/reconcile</code> deliberately never touches.</p>
+
+  <dl class="ex f-forms"><dt>/deepclean</dt><dd>Takes no arguments. It proposes a full sweep and waits for your confirmation.</dd></dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What it looks for</h4>
+      <p>Superseded plans, scaffolds already promoted into real code, memory-index drift, dated files
+      that are past due, development leftovers, and docs that have drifted from the code they describe.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">How it behaves</h4>
+      <p><b>Propose then confirm, always.</b> Manual only — never headless, never automatic, never on a
+      timer. It shows you what it wants to remove and waits.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Cadence</h4>
+      <p>Occasional. This is a periodic tidy, not part of any daily loop. Running it monthly is more
+      than enough for most setups.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for records that disagree with reality — that is <code>/reconcile</code>. This removes files; it never rewrites a thread or a goal. Reaching for it to fix a wrong checkbox deletes nothing useful and fixes nothing.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- =================== /tutorial =================== -->
+<article class="entry" id="tutorial">
+  <h3>/tutorial</h3>
+  <p class="lede f-lede">Interactive first-run onboarding. Hands-on, on your real data, not a doc to read.</p>
+
+  <dl class="ex f-forms">
+    <dt>/tutorial</dt><dd>The full first-run walkthrough.</dd>
+    <dt>/tutorial migrate</dt><dd>Jump straight to bringing an older Claude setup over.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What it produces</h4>
+      <p>A real, populated thread you will actually keep using — the one where you track how you set up
+      and tweak Claude. It ends with a board that isn't empty, which is what makes the whole
+      save-and-resume loop click.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">It goes one step at a time</h4>
+      <p>It waits for you to actually run each command rather than dumping a list. Say "skip" or "I
+      know this" at any prompt and it stops immediately without pushing.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Re-runnable</h4>
+      <p>Run it again any time. If you never want the startup nudge again it will leave an opt-out
+      marker on request.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not a reference — it teaches the loop once, hands-on. To look something up afterwards use <code>/kit</code> or the guide you are reading. Not for migrating settings on the same machine either; that case is a reveal, not a transfer.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- =================== /skill-builder =================== -->
+<article class="entry" id="skill-builder">
+  <h3>/skill-builder</h3>
+  <p class="lede f-lede">Build a new skill, or fix one that misbehaved.</p>
+
+  <dl class="ex f-forms"><dt>/skill-builder</dt><dd>Takes no arguments — say what you want built, or what an existing skill got wrong.</dd></dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">Building</h4>
+      <p>Turn a workflow you repeat into a command. It checks whether something already covers it
+      before starting, which saves you building a duplicate.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Fixing — the underused half</h4>
+      <p>When a skill fired at the wrong moment, missed a case, or did the wrong thing, describe what
+      happened and it <b>revises the skill</b>. That is the difference between an apology and a fix
+      that holds next time.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Reach for it when</h4>
+      <p>You have corrected Claude on the same thing twice. Two corrections means the instruction is
+      missing, not that you were unclear.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for using a skill, only for building or fixing one. And not for a one-off task — if you will not repeat it, a skill is overhead.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- =================== /theme =================== -->
+<article class="entry" id="theme">
+  <h3>/theme</h3>
+  <p class="lede f-lede">Preview and switch the statusline palette and base theme.</p>
+
+  <dl class="ex f-forms"><dt>/theme</dt><dd>Takes no arguments. Shows a picker.</dd></dl>
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">Worth doing early</h4>
+      <p>It is instant, reversible, and it confirms slash commands work before anything important
+      depends on them.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">PowerShell quirk</h4>
+      <p>In the PowerShell terminal the options don't expand on their own — click into the command
+      line to reveal the list.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for the guide’s own light/dark rendering, which follows your browser. This changes Claude Code’s statusline and base theme only.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>It is instant and reversible, which makes it a good first command to try — it confirms slash commands work before anything important depends on them.</p>
+    </div>
+
+
+  </div>
+</article>
+
+
+<!-- =================== /kit =================== -->
+<article class="entry" id="kit">
+  <h3>/kit</h3>
+  <p class="lede f-lede">Ask the kit about itself: what exists, which command fits, how two differ.</p>
+
+  <dl class="ex f-forms">
+    <dt>/kit</dt><dd>The whole inventory, one line per command.</dd>
+    <dt>/kit log</dt><dd>Everything about one command.</dd>
+    <dt>/kit memory</dt><dd>One layer, with its commands.</dd>
+    <dt>/kit stores</dt><dd>A reference section (also <code>ambient</code>, <code>troubleshooting</code>).</dd>
+    <dt>/kit "I want to remember what I decided"</dt><dd>Describe the goal in your own words; it routes.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What it does</h4>
+      <p>Reads this guide and answers from it, so there is exactly one copy of the content. Ask about a
+      command, a layer, a topic, or just say what you are trying to do.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">When to reach for it</h4>
+      <p>When you half-remember a command, when two of them sound the same, or when you want the answer
+      in the conversation rather than in a browser tab.</p>
+      <h4 class="f-not" style="margin-top:11px">When NOT to</h4>
+      <p>For Claude Code's own features, use the built-in <code>/help</code>. For a hands-on first run,
+      <code>/tutorial</code>. To build a skill, <code>/skill-builder</code>.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>Ambiguous words get <b>both</b> answers rather than a guess — ask <code>/kit review</code> and
+      you get <code>/change-review</code> and <code>/scrutinize</code>, with the difference.</p>
+      <p>It is read-only. Explaining <code>/log</code> never runs it.</p>
+    </div>
+  </div>
+
+  <div class="warn f-warn"><b>It is not called <code>/help</code> on purpose.</b> <code>/help</code> is Claude
+  Code's own, and the baseline door into the tool. A kit that took it over would make things worse for
+  exactly the person most likely to need it.</div>
+</article>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.8 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

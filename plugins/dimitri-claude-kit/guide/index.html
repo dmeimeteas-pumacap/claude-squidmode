@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claude Kit — Cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="mast">
+    <h1>Claude Kit — cheatsheet</h1>
+    <p class="sub">Everything the kit adds, grouped by what it is <i>for</i>. This page is the
+    surface level: skim it, and click a layer for the full detail. <b>Nothing here needs Claude
+    running</b> — it is plain files in a browser, for when you want a straight answer instead of a
+    conversation.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html" class="here">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<!-- ============================== START HERE ============================== -->
+<div class="lost" id="start">
+  <h2>Start here <span>Four commands cover almost every day. The rest can wait.</span></h2>
+
+  <div class="lostcol">
+    <h3>The loop, in order</h3>
+    <ul class="loop">
+      <li><i>1</i><span><b>/today</b> — decide the handful of things you're doing.</span></li>
+      <li><i>2</i><span><b>/log</b> — whenever you stop or figure something out.</span></li>
+      <li><i>3</i><span><b>/catchup</b> — when you come back and can't remember where you were.</span></li>
+      <li><i>4</i><span><b>/eod</b> — at the end, to see what the day amounted to.</span></li>
+    </ul>
+  </div>
+
+  <div class="lostcol">
+    <h3>The three pairs people mix up</h3>
+    <ul>
+      <li><b>/goals</b> vs <b>/today</b> — standing areas vs this one day.</li>
+      <li><b>/reconcile</b> vs <b>/deepclean</b> — wrong <i>records</i> vs stale <i>files</i>.</li>
+      <li><b>/grill-me</b> vs <b>/scrutinize</b> — while deciding vs after deciding.</li>
+    </ul>
+  </div>
+
+  <div class="lostcol">
+    <h3>Worth knowing up front</h3>
+    <ul>
+      <li><b>Claude never invokes /eod or /eow itself.</b> You type them — or put <b>/eod</b> on a schedule, which the kit ships setup for.</li>
+      <li><b>/change-review</b> is always on. There is nothing to run.</li>
+      <li>Prefer it interactive? Ask Claude <code>/kit</code> and name what you're after — a command, a topic, or just what you're trying to do.</li>
+      <li><code>/help</code> is Claude Code's own help, untouched. This kit does not take it over.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== MEMORY ============================== -->
+<section id="memory" style="--accent:var(--mem)">
+  <div class="lhead">
+    <h2><a href="memory.html">Memory</a></h2>
+    <span class="oneline">Work that outlives one conversation. Claude forgets; these are why it doesn't.</span>
+    <a class="full" href="memory.html">full detail &rarr;</a>
+  </div>
+  <div class="groups">
+    <div class="group">
+      <div class="glabel"><span>write it down</span><i></i></div>
+      <div class="card">
+        <div class="cmd"><a href="memory.html#log">/log</a></div>
+        <p class="what">Save where an effort stands and <i>why</i>, into a thread.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="memory.html#logall">/logall</a></div>
+        <p class="what">Sweep up sessions you never got around to logging.</p>
+      </div>
+    </div>
+    <div class="group">
+      <div class="glabel"><span>read it back</span><i></i></div>
+      <div class="card">
+        <div class="cmd"><a href="memory.html#catchup">/catchup</a></div>
+        <p class="what">Get briefed on one thread when you come back to it.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="memory.html#catchupall">/catchupall</a></div>
+        <p class="what">Every active thread at once, one line each.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== THE DAY ============================== -->
+<section id="day" style="--accent:var(--day)">
+  <div class="lhead">
+    <h2><a href="day.html">The day</a></h2>
+    <span class="oneline">Two doors. Mixing them up is the most common confusion: areas are standing, today is today.</span>
+    <a class="full" href="day.html">full detail &rarr;</a>
+  </div>
+  <div class="groups">
+    <div class="group">
+      <div class="glabel"><span>the two doors</span><i></i></div>
+      <div class="card">
+        <div class="cmd"><a href="day.html#goals">/goals</a></div>
+        <p class="what">Standing areas and their task lists. Also the status board.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="day.html#today">/today</a></div>
+        <p class="what">Pick and tick the 3-5 things you're doing <i>today</i>.</p>
+      </div>
+    </div>
+    <div class="group">
+      <div class="glabel"><span>looking back</span><i></i></div>
+      <div class="card">
+        <div class="cmd"><a href="day.html#eod">/eod</a></div>
+        <p class="what">Synthesize the whole day across every effort.<span class="tag">typed or scheduled</span></p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="day.html#eow">/eow</a></div>
+        <p class="what">End-of-week roll-up.<span class="tag">you type it</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== THINKING ============================== -->
+<section id="thinking" style="--accent:var(--think)">
+  <div class="lhead">
+    <h2><a href="thinking.html">Thinking</a></h2>
+    <span class="oneline">Pressure-test an idea before you build it. All three push back; they differ in when.</span>
+    <a class="full" href="thinking.html">full detail &rarr;</a>
+  </div>
+  <div class="flat">
+    <div class="card">
+      <div class="cmd"><a href="thinking.html#grill-me">/grill-me</a></div>
+      <p class="what">Get interrogated about a plan until it actually holds.</p>
+    </div>
+    <div class="card">
+      <div class="cmd"><a href="thinking.html#scrutinize">/scrutinize</a></div>
+      <p class="what">Independent adversarial critique of a finished thing.</p>
+    </div>
+    <div class="card">
+      <div class="cmd"><a href="thinking.html#change-review">/change-review</a></div>
+      <p class="what">How Claude shows you code edits.<span class="tag">always on</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== DOCUMENTATION ============================== -->
+<section id="docs" style="--accent:var(--docs)">
+  <div class="lhead">
+    <h2><a href="documentation.html">Documentation</a></h2>
+    <span class="oneline">Generate real docs from real code. Pick by how much you're pointing at.</span>
+    <a class="full" href="documentation.html">full detail &rarr;</a>
+  </div>
+  <div class="flat">
+    <div class="card">
+      <div class="cmd"><a href="documentation.html#document-process">/document-process</a></div>
+      <p class="what">A README for <i>one</i> project, service, or process.</p>
+    </div>
+    <div class="card">
+      <div class="cmd"><a href="documentation.html#document-section">/document-section</a></div>
+      <p class="what">A whole group at once — a folder, a category, everything.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== UPKEEP ============================== -->
+<section id="upkeep" style="--accent:var(--keep)">
+  <div class="lhead">
+    <h2><a href="upkeep.html">Upkeep</a></h2>
+    <span class="oneline">Two kinds of tidying, plus the setup bits. Reach for these when something feels off, not on a schedule.</span>
+    <a class="full" href="upkeep.html">full detail &rarr;</a>
+  </div>
+  <div class="groups">
+    <div class="group">
+      <div class="glabel"><span>when the records drift</span><i></i></div>
+      <div class="card">
+        <div class="cmd"><a href="upkeep.html#reconcile">/reconcile</a></div>
+        <p class="what">Make the stores match what actually happened.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="upkeep.html#deepclean">/deepclean</a></div>
+        <p class="what">Delete and archive stale <i>files</i>.</p>
+      </div>
+    </div>
+    <div class="group">
+      <div class="glabel"><span>setup</span><i></i></div>
+      <div class="card">
+        <div class="cmd"><a href="upkeep.html#tutorial">/tutorial</a></div>
+        <p class="what">The hands-on first run. Re-runnable any time.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="upkeep.html#skill-builder">/skill-builder</a></div>
+        <p class="what">Build or fix your own skills.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="upkeep.html#theme">/theme</a></div>
+        <p class="what">Change the statusline colours and base theme.</p>
+      </div>
+      <div class="card">
+        <div class="cmd"><a href="upkeep.html#kit">/kit</a></div>
+        <p class="what">Ask the kit about itself — this guide, in conversation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<p class="stamp">Claude Kit cheatsheet · open these files any time, no session required</p>
+
+<p class="vstamp">Claude Kit v0.1.8 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

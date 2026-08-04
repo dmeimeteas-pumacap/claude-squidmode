@@ -71,3 +71,12 @@ The installer is **merge-safe**: it backs up anything it touches, never overwrit
 - Your data lives in `~/.claude/threads`, `~/.claude/goals`, `~/.claude/session-notes` -- yours, never shipped.
 - Update later with `claude plugin update` + re-run `install.ps1` (see INSTALL.md).
 - Full per-feature reference: **GUIDE.md**.
+
+## The usage guide (no Claude session needed)
+
+After installing, open **`~/.claude/guide/index.html`** in a browser. It is the full reference for
+every command the kit ships, plus what runs automatically, where files live, and how to fix common
+problems. Nine pages, works offline, nothing to run.
+
+In a conversation, `/kit` answers the same content interactively -- name a command, a topic, or just
+what you are trying to do. (`/help` remains Claude Code's own; the kit does not take it over.)

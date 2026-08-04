@@ -1,0 +1,173 @@
+/* Claude Kit cheatsheet — shared styling for the overview + layer pages.
+   Self-contained: no webfonts, no CDN, works opened straight off disk. */
+
+*,*::before,*::after{box-sizing:border-box}
+
+:root{
+  --bg:#faf9f7; --panel:#ffffff; --ink:#1c1a17; --dim:#6b6560; --faint:#938c85;
+  --line:#e2ddd6;
+  --mem:#3f6fb5; --day:#b5763f; --think:#7a5aa8; --docs:#3f8f76; --keep:#8a8377;
+  --code:#f3f0eb; --lostbg:#fffdf8; --lostline:#e8ddc4;
+  --warn:#9a6b1f;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#141310; --panel:#1c1a17; --ink:#eae6e0; --dim:#a39c94; --faint:#7b746c;
+    --line:#312d28;
+    --mem:#7fa8e8; --day:#e0a468; --think:#b195da; --docs:#6cc2a4; --keep:#b0a89c;
+    --code:#221f1b; --lostbg:#1e1b15; --lostline:#443a26;
+    --warn:#d9ad5e;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#faf9f7; --panel:#ffffff; --ink:#1c1a17; --dim:#6b6560; --faint:#938c85;
+  --line:#e2ddd6;
+  --mem:#3f6fb5; --day:#b5763f; --think:#7a5aa8; --docs:#3f8f76; --keep:#8a8377;
+  --code:#f3f0eb; --lostbg:#fffdf8; --lostline:#e8ddc4; --warn:#9a6b1f;
+}
+:root[data-theme="dark"]{
+  --bg:#141310; --panel:#1c1a17; --ink:#eae6e0; --dim:#a39c94; --faint:#7b746c;
+  --line:#312d28;
+  --mem:#7fa8e8; --day:#e0a468; --think:#b195da; --docs:#6cc2a4; --keep:#b0a89c;
+  --code:#221f1b; --lostbg:#1e1b15; --lostline:#443a26; --warn:#d9ad5e;
+}
+
+body{
+  background:var(--bg); color:var(--ink);
+  font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;
+  margin:0; padding:0 clamp(18px,7vw,200px) 64px;
+  -webkit-font-smoothing:antialiased;
+}
+ul{margin:0;padding-left:19px}
+a{color:var(--accent,var(--mem))}
+
+/* ---------- masthead: one wide band, never a tall column ---------- */
+header{padding:26px 0 4px}
+.mast{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 26px}
+h1{font-size:clamp(20px,2.3vw,29px);line-height:1.05;margin:0;letter-spacing:-.02em;font-weight:650;
+   white-space:nowrap}
+.sub{color:var(--dim);margin:0;font-size:14px;flex:1 1 520px;min-width:0}
+.sub b{color:var(--ink);font-weight:600}
+.crumb{font-size:12.5px;color:var(--faint);margin:0 0 10px}
+.crumb a{color:var(--faint);text-decoration:none;font-weight:600}
+.crumb a:hover{color:var(--ink)}
+
+/* ---------- page nav ---------- */
+nav{
+  position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--line);
+  padding:11px 0;margin:16px 0 26px;
+  display:flex;flex-wrap:wrap;gap:7px;align-items:center;
+}
+nav a{
+  color:var(--dim);text-decoration:none;font-size:12.5px;font-weight:600;
+  padding:4px 12px;border:1px solid var(--line);border-radius:99px;white-space:nowrap;
+}
+nav a:hover{color:var(--ink);border-color:var(--dim)}
+nav a.here{color:var(--bg);background:var(--ink);border-color:var(--ink)}
+nav .navlabel{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-right:3px}
+
+/* ---------- START HERE panel: fills the row ---------- */
+/* Flex, not auto-fit grid: auto-fit was leaving the filled tracks at their
+   min width and pooling the slack on the right, so the columns bunched left.
+   flex:1 1 0 forces each column to take an equal share of the whole row. */
+.lost{
+  background:var(--lostbg);border:1px solid var(--lostline);border-radius:10px;
+  padding:16px 22px 18px;margin:0 0 32px;
+  display:flex;flex-wrap:wrap;gap:6px 44px;align-items:flex-start;
+}
+.lost h2{flex:0 0 100%;margin:0 0 6px;font-size:16px;letter-spacing:-.01em}
+.lostcol{flex:1 1 0;min-width:240px}
+.lost h2 span{color:var(--dim);font-weight:400;font-size:13.5px;margin-left:8px}
+.lostcol h3{margin:0 0 6px;font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.lostcol li{margin:3px 0;font-size:13.5px;color:var(--dim)}
+.lostcol li b{color:var(--ink);font-weight:600}
+.loop{list-style:none;padding:0}
+.loop li{display:flex;gap:9px;align-items:baseline}
+.loop i{color:var(--faint);font-style:normal;font-size:11px;min-width:13px}
+
+/* ---------- layer blocks (overview) ---------- */
+section{margin:0 0 38px;scroll-margin-top:60px}
+.lhead{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;
+       border-bottom:2px solid var(--accent);padding-bottom:7px}
+.lhead h2{margin:0;font-size:18px;letter-spacing:-.01em;color:var(--accent)}
+.lhead h2 a{color:inherit;text-decoration:none}
+.lhead h2 a:hover{text-decoration:underline}
+.lhead .oneline{color:var(--dim);font-size:13.5px;flex:1 1 300px;min-width:0}
+.lhead .full{font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none;white-space:nowrap}
+.lhead .full:hover{text-decoration:underline}
+
+/* categories side by side, so a break never eats a full row */
+.groups{display:grid;gap:15px 22px;margin-top:14px;
+        grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.glabel{display:flex;align-items:center;gap:9px;margin:0 0 9px}
+.glabel span{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+             font-weight:700;white-space:nowrap}
+.glabel i{flex:1;height:1px;background:var(--line)}
+.group>.card{margin-bottom:10px}
+.group>.card:last-child{margin-bottom:0}
+.flat{display:grid;gap:13px;margin-top:14px;
+      grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr))}
+
+/* ---------- cards ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+      border-radius:8px;padding:12px 14px}
+.cmd{font:600 15px/1.3 ui-monospace,"Cascadia Code",Consolas,monospace;color:var(--ink)}
+.cmd a{color:inherit;text-decoration:none}
+.cmd a:hover{text-decoration:underline}
+.what{color:var(--dim);font-size:13.5px;margin:4px 0 0}
+.tag{display:inline-block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+     font-weight:700;color:var(--faint);border:1px solid var(--line);
+     border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:2px;white-space:nowrap}
+
+code{background:var(--code);border-radius:4px;padding:1px 5px;
+     font:12.5px ui-monospace,"Cascadia Code",Consolas,monospace;overflow-wrap:break-word}
+
+/* forms list: wraps, never scrolls sideways */
+dl.ex{margin:7px 0 0;padding:8px 10px;background:var(--code);border-radius:6px}
+dl.ex dt{font:600 12.5px/1.5 ui-monospace,"Cascadia Code",Consolas,monospace;
+         color:var(--ink);overflow-wrap:anywhere}
+dl.ex dd{margin:0 0 6px;font-size:12.5px;color:var(--dim);line-height:1.45}
+dl.ex dd:last-child{margin-bottom:0}
+
+/* ---------- detail pages ---------- */
+.entry{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+       border-radius:9px;padding:16px 18px;margin:0 0 16px;scroll-margin-top:62px}
+.entry h3{margin:0;font:650 18px/1.25 ui-monospace,"Cascadia Code",Consolas,monospace;
+          letter-spacing:-.01em}
+.entry .lede{color:var(--dim);margin:6px 0 0;font-size:14px}
+/* same fix as .lost — equal shares of the full row, no right-hand slack */
+.cols{display:flex;flex-wrap:wrap;gap:4px 38px;margin-top:13px;align-items:flex-start}
+.cols>.block{flex:1 1 0;min-width:250px}
+.cols h4{margin:0 0 5px;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.cols p,.cols li{font-size:13.5px;color:var(--dim);margin:0 0 6px}
+.cols b{color:var(--ink);font-weight:600}
+.cols .block{min-width:0}
+.warn{border-left:3px solid var(--warn);background:var(--code);border-radius:0 6px 6px 0;
+      padding:9px 12px;margin:12px 0 0;font-size:13px;color:var(--dim)}
+.warn b{color:var(--warn)}
+.pairs{display:grid;gap:13px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));margin-top:6px}
+
+.stamp{color:var(--faint);font-size:12px;margin:26px 0 0;text-align:center}
+.stamp a{color:var(--faint)}
+
+/* ---------- print ---------- */
+@media print{
+  :root{--bg:#fff;--panel:#fff;--ink:#111;--dim:#333;--faint:#666;--line:#ccc;--code:#f2f2f2;
+        --lostbg:#fafafa;--lostline:#ccc;
+        --mem:#000;--day:#000;--think:#000;--docs:#000;--keep:#000;--warn:#000}
+  body{padding:0 8mm;font-size:10.5pt}
+  nav,.crumb{display:none !important}
+  details{display:block}                    /* nothing stays collapsed on paper */
+  details>summary{display:none}
+  .entry{page-break-inside:avoid;break-inside:avoid;border-left-width:2px}
+  .entry+.entry{page-break-before:auto}
+  section{page-break-before:always;break-before:page}
+  header{padding-top:0}
+  a{color:inherit;text-decoration:none}
+  a[href^="http"]::after{content:" (" attr(href) ")";font-size:9pt;color:#666}
+  .stamp{margin-top:6mm}
+}
+
+/* ---------- build-written footer stamp ---------- */
+.vstamp{color:var(--faint);font-size:11.5px;text-align:center;margin:6px 0 0}

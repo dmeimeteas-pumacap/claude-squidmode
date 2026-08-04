@@ -47,3 +47,14 @@ QUICKSTART.md, GUIDE.md, INSTALL.md, LITE.md, README.md (author-facing)
 - `accountability/` (deferred subsystem), `plans/`, `drafts/`, `backups/`, `cache/`, `downloads/`,
   `paste-cache/`, `file-history/`, `stats-cache.json`, `.obsidian/`
 - any file matching the personal-data scan (client names, tickers, absolute user paths) -- HARD FAIL.
+
+## v0.1.8 additions
+
+- `plugins/dimitri-claude-kit/skills/kit/` -- the `/kit` skill. Answers from the shipped guide;
+  holds no copy of its prose. NOT named `help`: `/help` is Claude Code's own built-in and the
+  baseline door into the tool, so the kit must not shadow it.
+- `plugins/dimitri-claude-kit/guide/` -- 9 HTML pages + `style.css`. Authored REPO-SIDE (unlike
+  skills, which derive from live `~/.claude`), staged by `Sync-Guide`, and copied to
+  `~/.claude/guide/` by `install.ps1` so a human has a stable path. `Assert-GuideCoverage` in
+  `build-package.ps1` hard-fails the build if an installed command has no guide entry or the guide
+  names a command that does not ship.

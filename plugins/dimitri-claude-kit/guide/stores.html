@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where things live — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  table.paths{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+  table.paths th{text-align:left;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+                 color:var(--faint);border-bottom:1px solid var(--line);padding:0 12px 6px 0;white-space:nowrap}
+  table.paths td{padding:7px 12px 7px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--dim)}
+  table.paths td:first-child{white-space:nowrap}
+  table.paths code{font-size:12.5px}
+  .yes{color:var(--docs);font-weight:600}
+  .no{color:var(--day);font-weight:600}
+  .lazy{color:var(--faint)}
+</style>
+</head>
+<body style="--accent:var(--think)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; Where things live</p>
+  <div class="mast">
+    <h1 style="color:var(--think)">▤ Where things live</h1>
+    <p class="sub">Everything the kit reads or writes, all of it under <code>~/.claude</code>. Two
+    columns matter: what <b>owns</b> a file, and whether it is safe to <b>edit by hand</b>. Editing a
+    derived file is harmless but pointless — it gets regenerated. Editing a canonical one is fine.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html" class="here">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>Reading this page <span>Three words do all the work.</span></h2>
+  <div class="lostcol">
+    <h3>Canonical</h3>
+    <ul><li>The real thing. If it disagrees with anything else, <b>it wins</b>. Safe to edit.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Derived</h3>
+    <ul><li>Generated from something canonical. Edit it and your change disappears on the next regeneration.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>On first use</h3>
+    <ul><li>Does not exist until the relevant command runs. Its absence is not a problem.</li></ul>
+  </div>
+</div>
+
+<div class="entry" id="continuity">
+  <h3>Continuity — your work</h3>
+  <p class="lede">The part worth backing up. Everything else in the kit can be reinstalled; this cannot.</p>
+  <table class="paths">
+    <tr><th>Path</th><th>Owner</th><th>Kind</th><th>Hand-edit</th><th>Holds</th></tr>
+    <tr><td><code>threads/active/*.md</code></td><td><code>/log</code></td><td>canonical</td><td class="yes">yes</td>
+        <td>One file per effort. Decisions and Log are append-only by convention; Where-I-left-off and Next get overwritten each capture.</td></tr>
+    <tr><td><code>threads/done/*.md</code></td><td><code>/log close</code></td><td>canonical</td><td class="yes">yes</td>
+        <td>Closed efforts. Kept readable on purpose so old work stays recoverable by search.</td></tr>
+    <tr><td><code>threads/INDEX.md</code></td><td><code>/log</code></td><td><b>derived</b></td><td class="no">no</td>
+        <td>The dashboard, and what the session-start banner reads. If it disagrees with a thread file, the thread file is right.</td></tr>
+    <tr><td><code>goals/goals.md</code></td><td><code>/goals</code></td><td>canonical</td><td class="yes">yes</td>
+        <td>Every area and its task list, in one file.</td></tr>
+    <tr><td><code>accountability/today.md</code></td><td><code>/today</code></td><td>canonical</td><td class="yes">yes</td>
+        <td>Today's plan. Rebuilt each morning; not history.</td></tr>
+    <tr><td><code>accountability/today-goalmap.tsv</code></td><td><code>/today</code></td><td><b>derived</b></td><td class="no">no</td>
+        <td>Maps today's items to their area tasks. This sidecar is what makes ticking write back.</td></tr>
+    <tr><td><code>memory/*.md</code> + <code>MEMORY.md</code></td><td>Claude</td><td>canonical</td><td class="yes">yes</td>
+        <td>One durable fact per file; the index loads every session.</td></tr>
+    <tr><td><code>session-notes/</code></td><td><code>/eod</code></td><td>canonical</td><td class="lazy">rarely</td>
+        <td>Day summaries. <code>/reconcile status</code> reads the newest as its prep sheet.</td></tr>
+    <tr><td><code>threads/links.tsv</code></td><td><code>/goals link</code></td><td>canonical</td><td class="lazy">carefully</td>
+        <td>Area-to-thread edges. Tab-separated, so line edits mangle it easily.</td></tr>
+  </table>
+</div>
+
+<div class="entry" id="config">
+  <h3>Configuration — yours</h3>
+  <p class="lede">The kit adds to these and never takes them over. Every one is backed up before first touch.</p>
+  <table class="paths">
+    <tr><th>Path</th><th>Owner</th><th>Kind</th><th>Hand-edit</th><th>Holds</th></tr>
+    <tr><td><code>CLAUDE.md</code></td><td>you</td><td>canonical</td><td class="yes">yes</td>
+        <td>Your standing instructions, loaded every session. The kit ships a template and will not overwrite an existing file.</td></tr>
+    <tr><td><code>settings.json</code></td><td>Claude Code</td><td>canonical</td><td class="yes">yes</td>
+        <td>The installer merges keys in; on any conflict it keeps yours and tells you.</td></tr>
+    <tr><td><code>statusline.ps1</code></td><td>installer</td><td>shipped</td><td class="lazy">optional</td>
+        <td>A plugin cannot deliver a statusline, so this arrives via the installer.</td></tr>
+    <tr><td><code>commands/theme.md</code></td><td>installer</td><td>shipped</td><td class="lazy">optional</td>
+        <td>Skipped if you already have one; yours wins.</td></tr>
+    <tr><td><code>.kit-backups/&lt;timestamp&gt;/</code></td><td>installer</td><td>canonical</td><td class="no">no</td>
+        <td>Every file the install would have overwritten, kept per-run. Your undo.</td></tr>
+    <tr><td><code>.kit-install-receipt.json</code></td><td>installer</td><td>derived</td><td class="no">no</td>
+        <td>What was added, so an uninstall can reverse exactly that.</td></tr>
+  </table>
+</div>
+
+<div class="entry" id="kit-files">
+  <h3>The kit's own files</h3>
+  <p class="lede">Replaced wholesale on update. Nothing here is yours to edit — change the source instead.</p>
+  <table class="paths">
+    <tr><th>Path</th><th>Owner</th><th>Kind</th><th>Hand-edit</th><th>Holds</th></tr>
+    <tr><td><code>guide/</code></td><td>installer</td><td>shipped</td><td class="no">no</td>
+        <td>These pages. Overwritten on every install; open <code>index.html</code> in a browser any time.</td></tr>
+    <tr><td><code>plugins/cache/.../</code></td><td>Claude Code</td><td>shipped</td><td class="no">no</td>
+        <td>The installed plugin: skills, hooks, and the copy of this guide that <code>/kit</code> reads. Version-keyed, so never bookmark a path in here.</td></tr>
+    <tr><td><code>janitor/drift-latest.json</code></td><td>detector</td><td>derived</td><td class="no">no</td>
+        <td>The drift report. Regenerated on demand.</td></tr>
+    <tr><td><code>janitor/staleness-seen.json</code></td><td>staleness hook</td><td>derived</td><td class="no">no</td>
+        <td>What has already been reported this session, so the note fires once per change.</td></tr>
+    <tr><td><code>.tutorial-optout</code></td><td>you</td><td>marker</td><td class="lazy">on first use</td>
+        <td>Empty file. Its existence stops the startup tutorial nudge for good.</td></tr>
+  </table>
+</div>
+
+<div class="entry" id="backup">
+  <h3>If you back up one thing</h3>
+  <p class="lede">Back up <code>threads/</code>, <code>goals/</code>, <code>memory/</code>, and <code>CLAUDE.md</code>.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>Why those four</h4>
+      <p>They are the only genuinely irreplaceable parts. The kit itself reinstalls in a minute; your
+      months of decisions and reasoning do not.</p>
+    </div>
+    <div class="block">
+      <h4>What to leave out</h4>
+      <p><code>janitor/</code>, <code>plugins/</code>, <code>.kit-backups/</code> — all regenerated or
+      reinstalled. And be deliberate about <code>projects/</code>: session transcripts can contain
+      anything you ever pasted into a conversation.</p>
+    </div>
+  </div>
+</div>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.8 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

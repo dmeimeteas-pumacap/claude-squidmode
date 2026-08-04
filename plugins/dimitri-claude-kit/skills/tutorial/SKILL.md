@@ -20,8 +20,9 @@ Base directory: `~/.claude/skills/tutorial` (installed path: `${CLAUDE_PLUGIN_RO
   knowledge — a separate private variant owns that.
 - Only ever name commands that appear in the **Skill catalog** below, and the catalog must match the
   skills actually installed beside this file (`${CLAUDE_PLUGIN_ROOT}/skills/`). That directory is the
-  runtime source of truth, because `PACKAGE-MANIFEST.md` lives one level above the plugin root and is
-  therefore NOT delivered to a recipient. Never name a command the kit does not ship.
+  runtime source of truth. `PACKAGE-MANIFEST.md` ships too, but at the REPO root, outside
+  `${CLAUDE_PLUGIN_ROOT}` — so a running skill cannot reliably read it, even though a recipient does
+  receive it. Never name a command the kit does not ship.
 - **The rule runs both ways (inverse catalog check).** A catalog row with no installed skill points at
   a dead command; an installed skill with no catalog row is invisible to onboarding. Both are defects.
   If the two ever disagree, say so plainly rather than silently trusting the table.
@@ -121,8 +122,12 @@ skills exist, naming two or three so the clause is concrete. Keep this short —
 second tutorial. Then go to Beat 4.
 
 Two things to state once, because they are invisible otherwise:
-- **`/eod` and `/eow` only run when the user types them.** They are `disable-model-invocation`, so
-  asking Claude to "wrap up the day" will not reach them. If the user wants them, they type them.
+- **Claude never invokes `/eod` or `/eow` itself.** Both are `disable-model-invocation`, so asking
+  Claude to "wrap up the day" will not reach them. Say it that way, NOT as "they only run if you type
+  them" — an external scheduler runs `/eod` perfectly well, and the kit ships
+  `bootstrap/scripts/setup-eod-schedule.ps1` to install exactly that (an afternoon and an evening
+  pass, via `run-eod.ps1 -Scheduled`). Mention the scheduler exists; it is opt-in, not assumed. There
+  is no shipped scheduler for `/eow`.
 - **`/change-review` is not a command to try.** It is an always-on format that shapes how Claude
   presents code edits; there is nothing to run.
 
@@ -135,7 +140,10 @@ and start using it?"
   their real data where safe. When done, offer this same choice again so they can chain as many as
   they want.
 - **Go use it** → wrap up: one encouraging line, note they can re-run `/tutorial` (or
-  `/tutorial migrate`) any time, and offer the opt-out (per "Exit & opt-out").
+  `/tutorial migrate`) any time, point them at the two reference doors — `/kit` in conversation and
+  **`~/.claude/guide/index.html`** in a browser with no session needed — and offer the opt-out (per
+  "Exit & opt-out"). Cite that `~/.claude/guide/` path, never a `plugins/cache/...` one: the cache
+  path is version-keyed and changes every release.
 
 Which skills are worth walking here will change as the kit grows — drive the "keep learning" menu
 off the catalog's `highlight` tier, don't hardcode a fixed sequence.
@@ -156,6 +164,7 @@ meanings: `spine` = taught hands-on in Beat 2, `highlight` = one-line pointer in
 | `/catchup` | Get briefed back on a thread when you return. | spine |
 | `/goals` | Standing areas and their task lists, plus the status board. | highlight |
 | `/today` | Pick and tick the 3-5 things you're doing today. | highlight |
+| `/kit` | Ask the kit about itself: what exists, which command fits. | highlight |
 | `/document-process` | Generate a README for one project. | highlight |
 | `/document-section` | Document a group of projects at once. | highlight |
 | `/eod` | Synthesize your whole day across efforts (you type it; Claude can't). | highlight |
@@ -191,8 +200,10 @@ meanings: `spine` = taught hands-on in Beat 2, `highlight` = one-line pointer in
   `/deepclean` stayed invisible after they shipped. Check both directions against
   `${CLAUDE_PLUGIN_ROOT}/skills/` **and** `${CLAUDE_PLUGIN_ROOT}/commands/` — not every shipped
   command is a skill (`/theme` is a command file), so checking only `skills/` reports false defects.
-- `PACKAGE-MANIFEST.md` sits at the repo root, ABOVE the plugin, so recipients never receive it. Do
-  not cite it as something the model can check at runtime.
+- `PACKAGE-MANIFEST.md` ships (it is in `$ShipDocs`) but lands at the repo root, ABOVE the plugin
+  subtree. A recipient has it; a running skill cannot count on reading it, because only the plugin
+  directory is in the installed cache. Keep it accurate as the repo-side record; do not cite it as a
+  runtime check.
 
 ## Maintenance — adding a skill to onboarding
 1. Ship the skill (add it to the build allowlist in `build-package.ps1`, and to `PACKAGE-MANIFEST.md`

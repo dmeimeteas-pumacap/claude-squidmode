@@ -38,7 +38,7 @@ $script:Report  = New-Object System.Collections.Generic.List[string]
 $script:Receipt = [ordered]@{
   kitVersion = $KitVersion; installedAt = $Stamp; claudeDir = $ClaudeDir
   backupDir = $null; filesOverwritten = @(); settingsKeysAdded = @()
-  settingsConflictsKept = @(); arraysAppended = @(); scaffoldDirsCreated = @()
+  settingsConflictsKept = @(); arraysAppended = @(); scaffoldDirsCreated = @(); usageGuide = $null
   tasksRegistered = @(); pluginsInstalled = @(); statusLine = 'untouched'; claudeMd = 'untouched'
   themeCommand = 'untouched'
 }
@@ -246,6 +246,30 @@ function Install-ThemeCommand {
 }
 
 # ---------------------------------------------------------------------------
+# Usage guide -- copy to a STABLE human-openable path.
+#
+# The guide also ships inside the plugin, which is where /kit reads it from. That plugin copy is NOT
+# usable by a person: installed plugins land under
+# ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/, a leaf that changes every release, so it
+# cannot go in a doc or a bookmark. So we copy it to ~/.claude/guide/ and every human-facing doc cites
+# that path only. This is a copy of a shipped artifact, never a second authored source -- it is
+# overwritten wholesale on re-install, and there is nothing in it a user would edit.
+# ---------------------------------------------------------------------------
+function Install-UsageGuide {
+  $src = Join-Path $PkgRoot 'plugins/dimitri-claude-kit/guide'
+  if (-not (Test-Path $src)) { $script:Report.Add("[SKIPPED] usage guide not present in the package."); return }
+  $dst = Join-Path $ClaudeDir 'guide'
+  $fresh = -not (Test-Path $dst)
+  if (-not $fresh) { Remove-Item $dst -Recurse -Force }
+  New-Item -ItemType Directory -Path $dst -Force | Out-Null
+  Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+  $n = @(Get-ChildItem $dst -Filter '*.html' -File).Count
+  $script:Receipt.usageGuide = 'guide'
+  $verb = if ($fresh) { 'INSTALLED' } else { 'REFRESHED' }
+  $script:Report.Add("[$verb] guide/ -- $n pages. Open $dst\index.html in a browser; no Claude session needed.")
+}
+
+# ---------------------------------------------------------------------------
 # Continuity scaffold -- empty dirs only, never seed personal content.
 # ---------------------------------------------------------------------------
 function Initialize-ContinuityScaffold {
@@ -342,6 +366,7 @@ function Invoke-Bootstrap {
   Merge-SettingsJson -TemplatePath $tmplSettings -TargetPath $settingsTarget
   Install-ClaudeTemplate -TemplatePath $tmplClaude -TargetPath $claudeTarget
   Install-ThemeCommand
+  Install-UsageGuide
   Initialize-ContinuityScaffold
   Install-ExternalPlugins
   Install-EodScheduleOptional

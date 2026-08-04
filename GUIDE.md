@@ -66,3 +66,12 @@ never drifts from what's installed.
 ## Version / updates
 The kit stamps a `_kitVersion` into your `settings.json` and ships a matching marker; the session-start
 hook warns if the two halves drift (re-run `install.ps1` after a `claude plugin update`). See INSTALL.md.
+
+## The usage guide (no Claude session needed)
+
+After installing, open **`~/.claude/guide/index.html`** in a browser. It is the full reference for
+every command the kit ships, plus what runs automatically, where files live, and how to fix common
+problems. Nine pages, works offline, nothing to run.
+
+In a conversation, `/kit` answers the same content interactively -- name a command, a topic, or just
+what you are trying to do. (`/help` remains Claude Code's own; the kit does not take it over.)

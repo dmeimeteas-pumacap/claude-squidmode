@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What runs on its own — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--keep)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; What runs on its own</p>
+  <div class="mast">
+    <h1 style="color:var(--keep)">◌ What runs on its own</h1>
+    <p class="sub">Everything on this page happens <b>without you invoking it</b>. If something in
+    Claude spoke to you and you did not ask it to, it is here. Nothing on this page writes to your
+    threads, goals, or day plan — the automatic layer only ever <i>detects and reports</i>.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html" class="here">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>The short version <span>Three things talk to you. Two things run quietly. Nothing edits your records.</span></h2>
+  <div class="lostcol">
+    <h3>Talks to you</h3>
+    <ul>
+      <li><b>Session-start banner</b> — once, when a session opens.</li>
+      <li><b>Staleness note</b> — mid-conversation, when state moved elsewhere.</li>
+      <li><b>Statusline</b> — always, at the bottom.</li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>Runs quietly</h3>
+    <ul>
+      <li><b>Drift detector</b> — on demand, writes only its own report.</li>
+      <li><b>Scheduled day summary</b> — only if you opted in.</li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>Never automatic</h3>
+    <ul>
+      <li>No store is ever written without you.</li>
+      <li>Nothing polls while you are away.</li>
+      <li>Your <code>CLAUDE.md</code> is never overwritten.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- =================== banner =================== -->
+<div class="entry" id="banner">
+  <h3>The session-start banner</h3>
+  <p class="lede">A short summary printed once when a Claude session opens, so you start against real state instead of a blank slate.</p>
+
+  <div class="cols">
+    <div class="block">
+      <h4>Where it gets its content</h4>
+      <p>From <code>threads/INDEX.md</code> — the dashboard your threads generate — plus
+      <code>session-notes/</code> for the most recent day summary. It reads; it never writes.</p>
+      <p>Run by <code>session-start-global.sh</code>, through
+      <code>run-bash-hook.cmd</code> so it works regardless of which shell Claude picked.</p>
+    </div>
+    <div class="block">
+      <h4>Why it is sometimes empty</h4>
+      <p>Because you have no threads yet. A fresh install shows a "no threads yet" line instead of a
+      board — that is correct, not broken. It fills in the moment you run <code>/log new</code>.</p>
+      <p>If it is empty and you <i>do</i> have threads, that is a real problem — see
+      <a href="troubleshooting.html#banner-empty">the banner is empty</a>.</p>
+    </div>
+    <div class="block">
+      <h4>The first-run nudge</h4>
+      <p>On a genuinely fresh setup it offers <code>/tutorial</code> once. It stops offering forever
+      once <code>.tutorial-optout</code> exists, which the tutorial creates on request — or you can
+      just ask Claude to disable the prompt.</p>
+    </div>
+  </div>
+</div>
+
+<!-- =================== staleness =================== -->
+<div class="entry" id="staleness">
+  <h3>The staleness note</h3>
+  <p class="lede">A one-line note injected into a running conversation when your state changed somewhere else — usually another Claude window.</p>
+
+  <div class="cols">
+    <div class="block">
+      <h4>What makes it fire</h4>
+      <p>Two conditions, checked as you submit a prompt: a store file
+      (<code>threads/</code>, <code>goals.md</code>, <code>INDEX.md</code>, <code>today.md</code>)
+      changed after this session started, or the set of drift findings changed.</p>
+      <p>The drift half keys on the <b>sorted finding IDs</b>, not the count — so swapping one finding
+      for another at the same count still fires. A count-only check would miss that.</p>
+    </div>
+    <div class="block">
+      <h4>Why it does not repeat</h4>
+      <p>It reports at most once per change-set per session, stamped in
+      <code>staleness-seen.json</code>. So it nags once and then stays quiet until something else
+      actually changes. Silence means nothing changed, not that the check is off.</p>
+    </div>
+    <div class="block">
+      <h4>What it cannot see</h4>
+      <p><b>It keys off files.</b> Another conversation holding real unlogged work has written nothing,
+      so it moves no file and triggers nothing. Silence from this layer is evidence nothing was
+      <i>written</i> — never that nothing <i>happened</i>.</p>
+      <p>That gap is exactly why <code>/reconcile</code> sweeps your other sessions directly.</p>
+    </div>
+  </div>
+
+  <div class="warn"><b>When you see it, re-read the named file before answering anything that depends
+  on it.</b> That is the whole point of the note — a stale answer that sounds confident is worse than
+  no answer.</div>
+</div>
+
+<!-- =================== detector =================== -->
+<div class="entry" id="detector">
+  <h3>The drift detector</h3>
+  <p class="lede">A deterministic check that compares your records against each other and writes a report. It never fixes anything.</p>
+
+  <div class="cols">
+    <div class="block">
+      <h4>When it runs</h4>
+      <p><b>On demand, not on a timer.</b> The staleness hook checks the report's age and, if it is
+      older than about ten minutes, spawns one detached <code>detect-drift.ps1</code> run in the
+      background. So it only ever runs while you are actually using Claude — nothing polls when you
+      are away.</p>
+    </div>
+    <div class="block">
+      <h4>What it writes</h4>
+      <p>Only its own artifacts under <code>janitor/</code>. It reads your stores and writes a JSON
+      report; it modifies no thread, no goal, no plan. Fixing what it finds is
+      <code>/reconcile</code>'s job, and that asks you first.</p>
+    </div>
+    <div class="block">
+      <h4>What it finds</h4>
+      <p>Dashboard rows whose dates lag their thread, a snapshot trailing live progress, memory files
+      with no index pointer, goals that have rolled over too many times, unconfirmed auto-captures.
+      Mechanical disagreements — not judgement calls.</p>
+    </div>
+  </div>
+</div>
+
+<!-- =================== statusline =================== -->
+<div class="entry" id="statusline">
+  <h3>The statusline</h3>
+  <p class="lede">The line at the bottom of the terminal. Shows where you are working and how much of three budgets you have used.</p>
+
+  <div class="cols">
+    <div class="block">
+      <h4>What the segments mean</h4>
+      <p><b>working in</b> — the directory in play. Then three filled circles with percentages:
+      <b>5h</b> and <b>wk</b> are your usage windows, and <b>ctx</b> is how full the current
+      conversation's context is.</p>
+      <p><code>ctx</code> climbing past about 80% is the cue to wrap up or start fresh.</p>
+    </div>
+    <div class="block">
+      <h4>Changing how it looks</h4>
+      <p><code>/theme</code> switches the palette. The kit ships on a neutral default rather than the
+      author's colours.</p>
+    </div>
+    <div class="block">
+      <h4>If it is missing</h4>
+      <p>A statusline cannot be delivered by a plugin — only the installer can set it. If you never ran
+      <code>install.ps1</code>, you will not have one.</p>
+    </div>
+  </div>
+</div>
+
+<!-- =================== scheduled =================== -->
+<div class="entry" id="scheduled">
+  <h3>Scheduled tasks</h3>
+  <p class="lede">Opt-in only. Nothing is scheduled unless you asked for it.</p>
+
+  <dl class="ex">
+    <dt>bootstrap\scripts\setup-eod-schedule.ps1</dt><dd>Installs the daily day-summary passes.</dd>
+    <dt>bootstrap\scripts\run-eod.ps1</dt><dd>What those tasks actually execute.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4>What it gives you</h4>
+      <p>A late-afternoon and an evening pass that run the day summary headlessly, so the digest exists
+      whether or not you remembered. The result lands in <code>session-notes/</code>, which is what
+      <code>/reconcile status</code> reads as its prep sheet.</p>
+    </div>
+    <div class="block">
+      <h4>Why this is not a contradiction</h4>
+      <p><code>/eod</code> is deliberately not model-invocable — Claude will not run it for you
+      mid-conversation. A <i>scheduler</i> is a different thing entirely, and it can. Both statements
+      are true at once.</p>
+    </div>
+    <div class="block">
+      <h4>Removing them</h4>
+      <p>They are ordinary Windows scheduled tasks. Delete them in Task Scheduler, or with
+      <code>schtasks /delete</code>. The install receipt lists what was registered.</p>
+    </div>
+  </div>
+</div>
+
+<!-- =================== claude.md + memory =================== -->
+<div class="entry" id="instructions">
+  <h3>Your instructions and your memory</h3>
+  <p class="lede">Two things Claude reads every session that are yours, not the kit's.</p>
+
+  <div class="cols">
+    <div class="block">
+      <h4><code>CLAUDE.md</code></h4>
+      <p>Your standing instructions, loaded into every session. The kit ships a <b>template</b>, and
+      the installer will not overwrite an existing file — the whole install is merge-safe by rule: back
+      up first, add or merge, never clobber.</p>
+      <p>Edit it freely. It is the highest-leverage file in the setup.</p>
+    </div>
+    <div class="block">
+      <h4>Memory files</h4>
+      <p>Small files under <code>memory/</code>, one durable fact each, indexed by
+      <code>MEMORY.md</code> which loads every session. Facts, not narrative.</p>
+    </div>
+    <div class="block">
+      <h4>Memory vs threads</h4>
+      <p>A <b>memory</b> is a fact that stays true — a preference, a gotcha, a convention. A
+      <b>thread</b> is the story of one effort over days. If it has a beginning and an end, it is a
+      thread; if it is just true, it is a memory.</p>
+    </div>
+  </div>
+</div>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.8 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>
