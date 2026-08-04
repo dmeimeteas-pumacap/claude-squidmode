@@ -77,7 +77,12 @@ Using live conversation + file context, additionally look for the judgment-only 
   1. For each active thread, take its `last_touched`.
   2. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** that date
      (subagent transcripts under `*/subagents/` count as part of their parent session, not separately).
-  3. Keyword-grep the candidates for the thread's `topic`/`tags`/title terms to rank them.
+  3. Keyword-grep the candidates for the thread's `topic`/`tags`/title terms to rank them — but
+     **rank on the USER's turns only**, e.g. `grep -oE '"role":"user","content":"[^"]{0,600}'` into a
+     scratch file first, then grep that. Ranking whole transcripts does not work: the session-start
+     hook injects the EOD recap into EVERY session, so recap topics score high everywhere. (Measured
+     on this check's first live run: five unrelated sessions all scored 600-1900 on export-kit terms
+     from the whole file, and separated cleanly the moment ranking moved to user turns.)
   4. Read the ranked candidates, or **explicitly flag them as unswept** if you do not. Never let an
      unread candidate pass as covered.
   Emit a finding naming the thread, the session UUID, and what the session appears to hold that the
@@ -95,6 +100,14 @@ Then the remaining judgment-only classes:
 - `thread_goal_divergence` — a thread `## Next` pointer and a goals.md task that describe the same
   work but disagree (one done, one open; or reworded apart). Surface + confirm; align by delegating
   (`/log done` / `/goals done`) — NEVER auto-sync, the stores are deliberately decoupled.
+- `auto_capture_unconfirmed` — **detector-provided (not judgment-only), but it needs a human, so it
+  behaves like one.** A `/log auto` capture asserts a MODEL's guess at which thread the work belonged
+  to; until confirmed, that thread's narrative may be filed under the wrong effort. The detector emits
+  one finding per active thread carrying either trace (the `⚠ AUTO (AI-selected…)` marker anywhere in
+  `## Where I left off`, or an open `Confirm this auto-capture` item in `## Next`), escalating to `med`
+  past 7 days since `last_touched`. A finding naming only ONE of the two traces is a **partial clear**
+  and is more interesting than the normal case: it usually means a marker was stripped by hand, or a
+  box was ticked without running `/log confirm`.
 - `possible_redundancy` — two areas/threads covering one effort.
 - `cross_thread_contradiction` — the cross-thread pass: for each active thread, take its open
   `## Next` items + questions in `## Where I left off`, and scan the OTHER active threads'
@@ -112,6 +125,17 @@ is info-overload-sensitive — keep it scannable; do not paste file bodies.
   found work into it. If several sessions hit one thread, prefer `/logall` so each is walked
   individually and the processed ledger is stamped. Candidates you chose not to read are reported as
   unswept in Step 5, never omitted.
+- **`auto_capture_unconfirmed`:** batch them, never one prompt per thread — this backlog runs to
+  double digits, so a per-thread walk is what made it accumulate. Present ONE multiSelect
+  `AskUserQuestion` pass listing the affected threads (most-stale first, `med` before `low`), each
+  option labelled with the slug + what the auto-capture claimed, plus a `— none of these —` sentinel.
+  Respect the popup limits (≤4 options per question, ≤4 questions per call, split rather than
+  truncate). For each thread the user ticks, delegate to **`/log confirm <slug>` (3f)**, which is the
+  only sanctioned clearer. Guardrails: a thread the user does NOT tick stays marked — silence is not
+  confirmation, and never clear a marker as a side effect of anything else. For a **partial clear**,
+  say which trace is missing and let the user decide whether the check actually happened; do not infer
+  it from the surviving trace. If the user cannot remember whether a capture was right, leave it open
+  and say so — an unverified confirm is worse than an open one.
 - **`index_*` (auto-fix, derived):** regenerate the affected INDEX row(s) from the thread file(s) —
   row format `| [[slug]] | project | prio | MM-DD(last_touched) | first-sentence-of-Where-I-left-off |`.
   `malformed_index_row` → split the merged line; `index_wrong_table` → move the row. Apply +
@@ -218,6 +242,10 @@ evidence that nothing *happened*. Any state question has to sweep the live sessi
 
 ## Versioning
 - New cleanliness categories: add a finding `kind` in `detect-drift.ps1` + a Step-4 handling line.
+- `auto_capture_unconfirmed` staleness threshold is `$AUTO_STALE_DAYS` in `detect-drift.ps1` (7 days,
+  measured off `last_touched` since that is the only date the frontmatter carries). The marker scan
+  reads the WHOLE `## Where I left off` section deliberately — checking only its first line
+  misreported every thread whose marker had been demoted under a `Prior:` paragraph by a later capture.
 - If the detector and this skill disagree on a `kind`, the detector's schema wins; update this file.
 - History: `/update-statuses` folded in 2026-07-31 (its stations 1–3+5 became the STATUS lane;
   station 4 quick-wins dropped — the board surfaces near-done items). Trigger phrases migrated to

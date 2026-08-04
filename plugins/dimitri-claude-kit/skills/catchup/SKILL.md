@@ -84,7 +84,10 @@ briefing, run a cheap freshness sweep on the resolved thread:
 
 1. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** the thread's
    `last_touched` (subagent files under `*/subagents/` belong to their parent session).
-2. Keyword-grep them for the thread's `topic`/`tags`/title terms and rank.
+2. Keyword-grep them for the thread's `topic`/`tags`/title terms and rank — **on the USER's turns
+   only** (`grep -oE '"role":"user","content":"[^"]{0,600}'` into a scratch file, then grep that).
+   Whole-transcript ranking is useless here: the session-start hook injects the EOD recap into every
+   session, so recap topics score high in sessions that never touched them.
 3. Read the top candidates, or name them as **unswept** in the briefing. An unread candidate is never
    reported as covered.
 4. Skip any session already listed in `threads/.logall-processed.tsv`.

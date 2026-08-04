@@ -156,12 +156,22 @@ foreach ($loc in @(@{dir = $ThreadsActive; tag = 'active' }, @{dir = $ThreadsDon
         if ($fmEnd -lt 0) { continue }
         $status = Get-FmValue $lines $fmEnd 'status'
         $lt     = Get-FmValue $lines $fmEnd 'last_touched'
-        $wlo    = (Get-Section $lines 'Where I left off' | Where-Object { $_.Trim() } | Select-Object -First 1)
+        $wloSec = @(Get-Section $lines 'Where I left off')
+        $wlo    = ($wloSec | Where-Object { $_.Trim() } | Select-Object -First 1)
         $nextSec = Get-Section $lines 'Next'
         $openNext = @($nextSec | Where-Object { $_ -match '^\s*-\s*\[ \]' })
+        # Auto-capture bookkeeping: the '/log auto' mode leaves TWO traces - a marker prefixing
+        # 'Where I left off' and an open 'Confirm this auto-capture' item in ## Next. Either one
+        # left behind means the human check never happened. Cleared only by '/log confirm' (3f).
+        # Scan the WHOLE section, not just its first line: a later capture prepends a fresh
+        # paragraph and demotes the prior one under 'Prior:', which pushes an AUTO marker out of
+        # the first line while leaving it very much present.
+        $autoMarked   = (($wloSec -join "`n") -match 'AUTO \(AI-selected')
+        $confirmBoxes = @($openNext | Where-Object { $_ -match '(?i)confirm.{0,40}auto-capture' }).Count
         $threads[$f.BaseName] = [pscustomobject]@{
             status = $status; last_touched = $lt; wlo = ([string]$wlo)
             wloFirst = (Get-FirstSentence ([string]$wlo)); openNextCount = $openNext.Count
+            autoMarked = $autoMarked; confirmBoxes = $confirmBoxes
             loc = $loc.tag; path = $f.FullName }
     }
 }
@@ -303,6 +313,39 @@ foreach ($slug in $threads.Keys) {
     if ($t.loc -eq 'active' -and $t.status -eq 'active' -and $t.openNextCount -eq 0) {
         Add-Finding 'report' 'status_claims_done' 'thread' $slug 'low' "active thread has no open ## Next items - close it or add next steps" 'log-close'
     }
+}
+
+# ---------- auto_capture_unconfirmed (REPORT): '/log auto' captures never human-checked ----------
+# An auto-capture asserts a MODEL's guess at which thread the work belonged to. Until a human
+# confirms it, the thread's narrative may be filed under the wrong effort - so these accumulate as
+# unverified state, not merely untidy checkboxes. Cleared by '/log confirm' (3f), never as a side
+# effect of an unrelated capture. Age is measured off last_touched, the only date the frontmatter
+# carries; a marker on a thread untouched for weeks is staler than the count alone suggests.
+$AUTO_STALE_DAYS = 7
+foreach ($slug in $threads.Keys) {
+    $t = $threads[$slug]
+    if ($t.loc -ne 'active') { continue }
+    if (-not $t.autoMarked -and $t.confirmBoxes -eq 0) { continue }
+
+    $ageDays = $null
+    if ($t.last_touched -match '^\d{4}-\d{2}-\d{2}$') {
+        try { $ageDays = [int]((Get-Date) - [datetime]::ParseExact($t.last_touched, 'yyyy-MM-dd', $null)).TotalDays } catch { $ageDays = $null }
+    }
+
+    # Both traces present is the normal unconfirmed case. Exactly one present means a partial
+    # clear - worth flagging distinctly, because it usually indicates a marker stripped by hand
+    # or a confirm box ticked without running '/log confirm'.
+    $detail = if ($t.autoMarked -and $t.confirmBoxes -gt 0) {
+        "unconfirmed auto-capture: AUTO marker + {0} open confirm item(s)" -f $t.confirmBoxes
+    } elseif ($t.autoMarked) {
+        "AUTO marker present but NO open confirm item - partial clear, the human check is unrecorded"
+    } else {
+        "{0} open confirm item(s) but no AUTO marker - partial clear, marker likely stripped by hand" -f $t.confirmBoxes
+    }
+    if ($null -ne $ageDays) { $detail += (" (last touched {0} d ago)" -f $ageDays) }
+
+    $sev = if ($null -ne $ageDays -and $ageDays -ge $AUTO_STALE_DAYS) { 'med' } else { 'low' }
+    Add-Finding 'report' 'auto_capture_unconfirmed' 'thread' $slug $sev $detail 'log-confirm'
 }
 
 # ---------- links.tsv orphan rows (REPORT): a link edge whose goal or thread file is gone ----------

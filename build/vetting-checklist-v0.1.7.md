@@ -66,10 +66,14 @@ catalog against what's actually installed and tell me about any mismatch in eith
 - [ ] Presented as an always-on format with nothing to run, not as a command to try. If Beat 4's
       "keep learning" menu offers to walk you through `/change-review` hands-on, that is a fail.
 
-**5. `/eod` and `/eow` invisibility.**
-- [ ] The tutorial states once that these only run when the user types them.
-- [ ] Cross-check the claim: ask the sandbox Claude to "wrap up my day and synthesize it". It must NOT
-      successfully invoke `/eod`. If it does, the clause is wrong and needs removing, not keeping.
+**5. `/eod` and `/eow` invisibility.** The claim under test is precise, so read the wording carefully.
+- [ ] The tutorial says **Claude never invokes them itself**, and does NOT say "they only run if you
+      type them" — the latter is false, since a scheduler runs `/eod` fine.
+- [ ] It mentions `bootstrap/scripts/setup-eod-schedule.ps1` exists as an opt-in, without implying it
+      is already installed.
+- [ ] Cross-check the model half: ask the sandbox Claude to "wrap up my day and synthesize it". It must
+      NOT successfully invoke `/eod`. If it does, the `disable-model-invocation` claim is wrong.
+- [ ] Confirm no scheduler is claimed for `/eow` (none ships).
 
 **6. Frontmatter routing.** Ask: *"what should I use to plan my day?"*
 - [ ] Routes to `/today`. Nothing should route day-planning to `/goals` any more.
