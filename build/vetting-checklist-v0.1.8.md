@@ -111,8 +111,9 @@ about `/eod` and would have passed a defect. Every ambient claim below is a beha
 - [ ] No horizontal scrolling on any page at 1280px and at 375px.
 - [ ] START HERE and the detail columns fill the row — no bunching left. (Regression: `auto-fit` grid
       pooled slack on the right; the fix is flex with `flex:1 1 0`.)
-- [ ] Print preview on two pages: nav hidden, light colours forced, all detail expanded, page breaks
-      between entries.
+- [ ] Print preview on two pages: nav hidden, light colours forced, all detail expanded, no entry
+      split across a page break, and each section starts on a new page. (The CSS deliberately does
+      NOT force a break between entries — `page-break-inside:avoid` per entry is the contract.)
 - [ ] Layer identity readable without colour (glyphs present) — check in print and in greyscale.
 - [ ] Both themes, light and dark.
 - [ ] Version + count stamp present in every page footer.

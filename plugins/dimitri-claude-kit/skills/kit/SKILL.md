@@ -14,7 +14,8 @@ and "which one do I use" any time after that, at full depth on request.
 **The content lives in HTML, and this skill reads it.** There is no second copy of the prose in this
 skill, deliberately — a duplicated inventory is how the kit ended up with a dead `/help` reference and
 a stale manifest claim in the first place. Read the pages under
-`${CLAUDE_PLUGIN_ROOT}/guide/` (author install: `~/.claude/guide/`):
+`${CLAUDE_PLUGIN_ROOT}/guide/` (the installer also drops a stable human-openable copy at
+`~/.claude/guide/`):
 
 | Page | Holds |
 |---|---|

@@ -56,8 +56,8 @@ runtime). Both are instances of the same blind spot the inverse catalog rule now
 **2. Catalog completeness, inverse direction.** Ask in the sandbox: *"compare the tutorial's skill
 catalog against what's actually installed and tell me about any mismatch in either direction."*
 - [ ] It checks BOTH `skills/` and `commands/` (a `skills/`-only check falsely flags `/theme`).
-- [ ] It reports no mismatch. 17 skills ship; the catalog lists 16 of them plus `/theme`; `tutorial`
-      is deliberately self-excluded.
+- [ ] It reports no mismatch. 18 skills ship (as of 0.1.8, `/kit` included); the catalog lists 17 of
+      them plus `/theme` (18 rows); `tutorial` is deliberately self-excluded.
 
 **3. Post-split `/goals` wording.** In Beat 3, listen to how `/goals` is described.
 - [ ] It describes standing areas and the status board, NOT "plan your day". The day door is `/today`.

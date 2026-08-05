@@ -69,6 +69,7 @@ Collect from:
 
 Apply this discipline to everything collected:
 - **Verify, don't propagate.** Each existing claim must be confirmed against current code before it survives into the new doc.
+- **Carve-out — ledger-verified comments (docs-program-v2 P1, 2026-08-05).** Before distrusting a source comment, check the project's comment ledger (`.claude/coverage/comment-ledger/<project>.jsonl`, or the generated `comment-ledger.md` view). A comment with an `applied` ledger record (any origin: authored, absorbed, or revised) has already passed two-stage human review — treat it as VERIFIED input, not a claim to re-check. Comments in files with no ledger records keep the full distrust-and-verify rule.
 - **Weigh recency.** Compare comment/doc dates against the code they describe. A comment older than the logic it narrates is a red flag, not a citation.
 - **Reconcile contradictions explicitly.** When a comment, a README, and the code disagree: **code wins**, and record the discrepancy.
 - **Preserve intent even when mechanics are stale.** A comment's *why* may be worth carrying forward as "intent per original author; mechanics have since changed," flagged as such.
@@ -139,6 +140,10 @@ Use `git log` and `git diff` on the relevant source files if helpful. You are lo
 
 ### Update Pass 2 — Patch the affected sections
 Edit only the sections the delta affects. Preserve all unchanged content verbatim — do not reword sections that are still accurate just to leave a mark. Resolve any items in **Known gaps / future work** that are now done by moving the content into the appropriate section as a verified statement. Add new gaps or questions if the changes introduce them.
+
+**Reviewed-section fence (docs-program-v2 P1, 2026-08-05).** A section whose heading is immediately followed by a line matching `*Reviewed: YYYY-MM-DD <initials>*` is HUMAN-REVIEWED content, protected to the next same-or-higher heading. Machine updates never rewrite inside a fence: patch around it, or — if the delta genuinely lands inside it — HOLD that edit and flag it in the report (headless) or to the user (interactive). Human-reviewed text is never machine-overwritten.
+
+**Reviewed-column upkeep.** After any applied machine patch to a doc, update its coverage-ledger row's last (`Reviewed`) cell: if the patch was user-approved in-session, refresh the date; otherwise append the machine-change note so the cell reads `YYYY-MM-DD <initials> --- Machine changed YYYY-MM-DD` (re-review advised) — never blank it.
 
 ### Update Pass 3 — Self-revision + checkpoint (interactive) OR write-and-report (headless)
 Re-read the patched README as a whole; confirm it still reads coherently after the edits. Then:

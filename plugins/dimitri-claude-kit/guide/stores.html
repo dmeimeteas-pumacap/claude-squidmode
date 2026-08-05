@@ -6,7 +6,10 @@
 <title>Where things live — Claude Kit cheatsheet</title>
 <link rel="stylesheet" href="style.css">
 <style>
-  table.paths{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px}
+  /* display:block lets a too-wide table scroll inside itself on narrow screens
+     (the page body must never scroll sideways); harmless at desktop widths. */
+  table.paths{width:100%;border-collapse:collapse;margin-top:14px;font-size:13.5px;
+              display:block;overflow-x:auto;max-width:100%}
   table.paths th{text-align:left;font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
                  color:var(--faint);border-bottom:1px solid var(--line);padding:0 12px 6px 0;white-space:nowrap}
   table.paths td{padding:7px 12px 7px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--dim)}
@@ -79,7 +82,7 @@
         <td>One durable fact per file; the index loads every session.</td></tr>
     <tr><td><code>session-notes/</code></td><td><code>/eod</code></td><td>canonical</td><td class="lazy">rarely</td>
         <td>Day summaries. <code>/reconcile status</code> reads the newest as its prep sheet.</td></tr>
-    <tr><td><code>threads/links.tsv</code></td><td><code>/goals link</code></td><td>canonical</td><td class="lazy">carefully</td>
+    <tr><td><code>goals/links.tsv</code></td><td><code>/goals link</code></td><td>canonical</td><td class="lazy">carefully</td>
         <td>Area-to-thread edges. Tab-separated, so line edits mangle it easily.</td></tr>
   </table>
 </div>
@@ -142,7 +145,7 @@
 
 <p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
 
-<p class="vstamp">Claude Kit v0.1.8 &middot; 19 commands &middot; open these files any time, no session required</p>
+<p class="vstamp">Claude Kit v0.1.9 &middot; 19 commands &middot; open these files any time, no session required</p>
 
 </body>
 </html>

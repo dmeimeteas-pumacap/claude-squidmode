@@ -74,9 +74,16 @@ Using live conversation + file context, additionally look for the judgment-only 
 - `unswept_live_session` — the detector only sees state that was WRITTEN to the stores. A concurrent
   conversation that has not logged yet is invisible to every deterministic check, so a report reading
   `counts.total == 0` does NOT mean the stores match reality. Sweep it explicitly:
-  1. For each active thread, take its `last_touched`.
+  1. For each active thread, take its `last_touched`. **If `threads/active/` is EMPTY, this
+     per-thread walk is a no-op — that is a new install's normal first-week state, NOT "nothing to
+     sweep". Fall back to the session-centric scan `/logall` uses: every `projects/*/` session
+     `*.jsonl` not recorded in `threads/.logall-processed.tsv` is a candidate. Skip to step 4 with
+     those candidates and emit one `unswept_live_session` finding naming each unlogged session
+     (suggest `/logall`, or `/log new` for the first thread, as the resolution).**
   2. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** that date
      (subagent transcripts under `*/subagents/` count as part of their parent session, not separately).
+     Sessions older than every thread's `last_touched` but absent from `.logall-processed.tsv` are
+     still candidates — a thread date never bounds work that predates the thread.
   3. Keyword-grep the candidates for the thread's `topic`/`tags`/title terms to rank them — but
      **rank on the USER's turns only**, e.g. `grep -oE '"role":"user","content":"[^"]{0,600}'` into a
      scratch file first, then grep that. Ranking whole transcripts does not work: the session-start

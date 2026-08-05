@@ -91,6 +91,13 @@ section{margin:0 0 38px;scroll-margin-top:60px}
 .lhead{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;
        border-bottom:2px solid var(--accent);padding-bottom:7px}
 .lhead h2{margin:0;font-size:18px;letter-spacing:-.01em;color:var(--accent)}
+/* layer identity without colour (print/greyscale): the index headings carry the SAME glyph the
+   matching detail page's h1 uses. Keyed off the inline --accent each section sets. */
+section[style*="--mem"] .lhead h2::before  {content:"\25C6\00A0"} /* ◆ memory */
+section[style*="--day"] .lhead h2::before  {content:"\2726\00A0"} /* ✦ the day */
+section[style*="--think"] .lhead h2::before{content:"\25B3\00A0"} /* △ thinking */
+section[style*="--docs"] .lhead h2::before {content:"\25A0\00A0"} /* ■ documentation */
+section[style*="--keep"] .lhead h2::before {content:"\25CF\00A0"} /* ● upkeep */
 .lhead h2 a{color:inherit;text-decoration:none}
 .lhead h2 a:hover{text-decoration:underline}
 .lhead .oneline{color:var(--dim);font-size:13.5px;flex:1 1 300px;min-width:0}

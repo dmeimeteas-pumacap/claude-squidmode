@@ -21,7 +21,7 @@ human-readable mirror -- keep them in sync.
   back to `${CLAUDE_PLUGIN_ROOT}/scripts/`; artifacts always write to `~/.claude/janitor/`.
 
 ## Bootstrap bucket (installed by `bootstrap/install.ps1`)
-- statusline.ps1 + themes/cc-active.json
+- statusline.ps1 + statusline-lib.ps1 (the bar dot-sources the lib; they ship together) + themes/cc-active.json
 - settings.template.json (model, theme, effortLevel, autoUpdatesChannel; `_kitVersion` stamped at install)
 - CLAUDE.template.md (genericized)
 - scripts/setup-eod-schedule.ps1 + run-eod.ps1 (optional, Windows, opt-in)

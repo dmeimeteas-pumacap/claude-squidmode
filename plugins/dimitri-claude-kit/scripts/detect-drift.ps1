@@ -407,5 +407,6 @@ if (-not $Quiet) {
 }
 
 # Exit 0 on success regardless of any live_progress sub-command's exit code (Invoke-Expression of a
-# failing cmd leaves $LASTEXITCODE non-zero, which would otherwise mislead callers like /current).
+# failing cmd leaves $LASTEXITCODE non-zero, which would otherwise mislead callers like the
+# staleness hook and /reconcile).
 exit 0

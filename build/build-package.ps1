@@ -37,6 +37,9 @@ $ShipCommands    = @('theme.md')
 $ShipHooks       = @('session-start-global.sh','expand-prompt.sh')
 $BootstrapAssets = @(
   @{ src='statusline.ps1';                 dst='statusline.ps1' },
+  # statusline.ps1 dot-sources this lib (Get-WorkingLabel); shipping one without the other breaks
+  # every fresh install's bar (0.1.8 defect B1). Assert-ScriptDeps now gates this class at build time.
+  @{ src='statusline-lib.ps1';             dst='statusline-lib.ps1' },
   @{ src='themes/cc-active.json';          dst='themes/cc-active.json' },
   @{ src='scripts/setup-eod-schedule.ps1'; dst='scripts/setup-eod-schedule.ps1' },
   @{ src='scripts/run-eod.ps1';            dst='scripts/run-eod.ps1' }
@@ -340,6 +343,34 @@ function Assert-GuideCoverage {
   $Report.Add("Assert-GuideCoverage: clean ($($installed.Count) commands, $($pages.Count) pages)")
 }
 
+function Assert-ScriptDeps {
+  # P9 (0.1.9): a staged script that dot-sources / sources a SIBLING script must ship that sibling.
+  # This is the gate that would have caught B1 (statusline.ps1 requiring an unshipped
+  # statusline-lib.ps1). HARD gate on purpose -- a missing include is never a docs-quality issue,
+  # so -AllowIncompleteDocs does not downgrade it.
+  $problems = New-Object System.Collections.Generic.List[string]
+  $stagedNames = @(Get-ChildItem $Stage -Recurse -File | ForEach-Object { $_.Name })
+  $includePats = @(
+    '\.\s+\(Join-Path\s+\$PSScriptRoot\s+[''"]([^''"]+\.ps1)[''"]\)',                          # . (Join-Path $PSScriptRoot 'lib.ps1')
+    '(?m)(?:^|[;&|]\s*)(?:source|\.)\s+"?\$(?:\{[A-Za-z_]+\}|[A-Za-z_]+)/([A-Za-z0-9_.-]+\.(?:sh|ps1))"?'  # source "$DIR/x.sh"
+  )
+  foreach ($f in Get-ChildItem $Stage -Recurse -File -Include '*.ps1','*.sh') {
+    $text = [System.IO.File]::ReadAllText($f.FullName)
+    foreach ($p in $includePats) {
+      foreach ($m in [regex]::Matches($text, $p)) {
+        $dep = Split-Path -Leaf $m.Groups[1].Value
+        if ($stagedNames -notcontains $dep) { $problems.Add("$($f.Name) includes '$dep', which is absent from the staged package") }
+      }
+    }
+  }
+  if ($problems.Count) {
+    Write-Host "`n!! Assert-ScriptDeps FAILED -- staged scripts include files that do not ship:" -ForegroundColor Red
+    $problems | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
+    throw "Assert-ScriptDeps: $($problems.Count) issue(s). Add the missing file(s) to the allowlist or remove the include."
+  }
+  $Report.Add("Assert-ScriptDeps: clean")
+}
+
 function Assert-NoPersonalData {
   $hits = New-Object System.Collections.Generic.List[string]
   Get-ChildItem $Stage -Recurse -File | ForEach-Object {
@@ -392,6 +423,7 @@ function Invoke-Build {
   Sync-Docs
   Sync-Guide
   Assert-GuideCoverage      # <- HARD GATE: dead refs / missing entries (see -AllowIncompleteDocs)
+  Assert-ScriptDeps         # <- HARD GATE: shipped script includes an unshipped sibling (B1 class)
   Assert-NoPersonalData     # <- HARD GATE: throws before Promote on any leak
   Promote-Stage
   Remove-Item $Stage -Recurse -Force -ErrorAction SilentlyContinue

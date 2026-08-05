@@ -54,8 +54,8 @@ It prints a summary of everything it skipped or kept.
 
 ## Update
 ```
-claude plugin marketplace update dimitri-claude-kit          # refresh the git marketplace checkout
-claude plugin update dimitri-claude-kit@dimitri-claude-kit   # qualified <plugin>@<marketplace> form
+claude plugin marketplace update claude-squidmode            # refresh the git marketplace checkout
+claude plugin update dimitri-claude-kit@claude-squidmode     # qualified <plugin>@<marketplace> form
 git config --global --add safe.directory <clone-path>        # only if the pull hits dubious-ownership
 git -C <clone-path> pull                                     # get install.ps1 for the new version
 powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap\install.ps1 -NonInteractive

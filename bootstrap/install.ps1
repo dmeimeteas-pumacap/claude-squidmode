@@ -141,8 +141,28 @@ function Merge-SettingsJson { param([string] $TemplatePath, [string] $TargetPath
           $cur.$key | Add-Member -NotePropertyName $sub.Name -NotePropertyValue $sub.Value; $changed = $true
           $script:Receipt.settingsKeysAdded += "$key.$($sub.Name)"
         } elseif (-not (Json-Eq $cur.$key.$($sub.Name) $sub.Value)) {
-          $script:Receipt.settingsConflictsKept += "$key.$($sub.Name)"
-          $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)' = your value (kit wanted '$($sub.Value)'; re-run with -Interactive to choose).")
+          # 0.1.9 (B2): recurse ONE level further when both sides are objects. INSTALL.md has the
+          # recipient run `claude plugin marketplace add` BEFORE this installer, which pre-creates
+          # extraKnownMarketplaces.<name> WITHOUT autoUpdate -- so the flat keep-theirs branch here
+          # dropped autoUpdate for every recipient, and nobody ever received automatic updates.
+          $curEntry = $cur.$key.$($sub.Name)
+          if ($curEntry -is [pscustomobject] -and $sub.Value -is [pscustomobject]) {
+            $nestedKept = @()
+            foreach ($n in $sub.Value.PSObject.Properties) {
+              if ($curEntry.PSObject.Properties.Name -notcontains $n.Name) {
+                $curEntry | Add-Member -NotePropertyName $n.Name -NotePropertyValue $n.Value; $changed = $true
+                $script:Receipt.settingsKeysAdded += "$key.$($sub.Name).$($n.Name)"
+              } elseif (-not (Json-Eq $curEntry.$($n.Name) $n.Value)) { $nestedKept += $n.Name }
+            }
+            if ($nestedKept.Count) {
+              $script:Receipt.settingsConflictsKept += @($nestedKept | ForEach-Object { "$key.$($sub.Name).$_" })
+              $consequence = if ($nestedKept -contains 'autoUpdate') { " CONSEQUENCE: you will NOT receive automatic kit updates until autoUpdate is true." } else { "" }
+              $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)': your value(s) kept for $($nestedKept -join ', ') (kit differs; re-run with -Interactive to choose).$consequence")
+            }
+          } else {
+            $script:Receipt.settingsConflictsKept += "$key.$($sub.Name)"
+            $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)' = your value (kit wanted '$($sub.Value)'; re-run with -Interactive to choose).")
+          }
         }
       }
       continue
@@ -198,20 +218,34 @@ function Install-ClaudeTemplate { param([string] $TemplatePath, [string] $Target
 # ---------------------------------------------------------------------------
 function Install-StatusLine { param([string] $SettingsTarget)
   $slPath = Join-Path $ClaudeDir 'statusline.ps1'
+  $slLib  = Join-Path $ClaudeDir 'statusline-lib.ps1'
+  $libSrc = Join-Path $PkgRoot 'bootstrap/statusline-lib.ps1'
   $settings = if (Test-Path $SettingsTarget) { Get-Content $SettingsTarget -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
   $hasFile = Test-Path $slPath
   $hasKey  = $settings.PSObject.Properties.Name -contains 'statusLine'
 
   if (($hasFile -or $hasKey) -and -not $IncludeStatusLine) {
+    # 0.1.9 (B1): a statusline installed by kit 0.1.7/0.1.8 dot-sources statusline-lib.ps1, which
+    # those versions never shipped. Repair that one case here: add-only, never touches an existing
+    # file, and skips statuslines that don't reference the lib (i.e. the user's own).
+    if ($hasFile -and (Test-Path $libSrc) -and -not (Test-Path $slLib) -and
+        ((Get-Content $slPath -Raw) -match 'statusline-lib\.ps1')) {
+      Copy-Item $libSrc $slLib -Force
+      $script:Receipt.statusLine = 'skipped (existing detected); statusline-lib.ps1 added (required by it, was missing)'
+      $script:Report.Add("[REPAIRED] statusline-lib.ps1 installed -- your statusline.ps1 requires it and it was missing (kit 0.1.7/0.1.8 defect).")
+      return
+    }
     $script:Receipt.statusLine = 'skipped (existing detected)'
     $script:Report.Add("[SKIPPED] statusline left as-is (existing detected). Re-run with -IncludeStatusLine to adopt the kit's (backs yours up first).")
     return
   }
   if (($hasFile -or $hasKey) -and $IncludeStatusLine) {
     if ($hasFile) { Backup-One $slPath }
+    if (Test-Path $slLib) { Backup-One $slLib }
     if ($hasKey)  { Backup-One $SettingsTarget }
   }
   Copy-Item (Join-Path $PkgRoot 'bootstrap/statusline.ps1') $slPath -Force
+  if (Test-Path $libSrc) { Copy-Item $libSrc $slLib -Force }   # B1: the bar dot-sources this lib
   $themesDir = Join-Path $ClaudeDir 'themes'; New-Item -ItemType Directory -Path $themesDir -Force | Out-Null
   Copy-Item (Join-Path $PkgRoot 'bootstrap/themes/cc-active.json') (Join-Path $themesDir 'cc-active.json') -Force
   # wire the settings key (atomic with the file)
