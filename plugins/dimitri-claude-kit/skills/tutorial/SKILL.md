@@ -60,6 +60,10 @@ Before anything else, set the frame in 2-3 sentences so nothing that follows fee
   you (and Claude) resume exactly where you left off instead of re-explaining each time.
 - **What this walkthrough does.** In a few minutes you'll create your first thread and watch the
   save-and-resume loop work end to end, then get pointed at the rest.
+- **The two standing reference doors** (name them up front, not only at wrap-up): the usage guide at
+  **`~/.claude/guide/index.html`** — open it in a browser any time, no session needed — and `/kit`,
+  which answers "what can this do / which command do I use" in conversation. Never cite a
+  `plugins/cache/...` path for the guide.
 - **The `🐤 canary` line** (mention only if their replies show it): an optional health check from
   `CLAUDE.md` — if it ever disappears or changes, that's an early sign the context is degrading and
   you should start a fresh session. It can be removed.

@@ -583,6 +583,16 @@ if [ -f "$OWED_FILE" ] && ! { [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_F
   fi
 fi
 
+# Usage-guide pointer: one dim line, ALWAYS shown when the installed guide exists
+# (~/.claude/guide/ is the stable copy install.ps1 drops). The guide kept going
+# unused because nothing surfaced its path; this is its standing home, alongside
+# a /kit reminder (the in-session way to ask the same questions).
+GUIDE_INDEX="$CLAUDE_DIR/guide/index.html"
+if [ -f "$GUIDE_INDEX" ]; then
+  _G_RESET=$'\033[0m'; _G_DIM=$'\033[2m'; _G_ACCENT=$'\033[38;2;124;130;174m'; _G_NL=$'\n'
+  BANNER_CONTENT="${BANNER_CONTENT}${_G_NL}  ${_G_DIM}─ guide: ${_G_RESET}${_G_ACCENT}~/.claude/guide/index.html${_G_RESET}${_G_DIM} (browser, no session) · or ask ${_G_RESET}${_G_ACCENT}/kit${_G_RESET}${_G_NL}"
+fi
+
 # Normal-path marker write: the recap banner was rendered by this hook directly (no
 # skill needed), so claim today's orientation here. The recovery path leaves the marker
 # untouched so an un-run /eod re-fires next session. printf writes no BOM (the hook's

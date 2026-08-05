@@ -47,6 +47,12 @@ reasoning itself. Optional — delete this section if you don't want it.
 ## Clarification-First Mode
 <!-- KEEP — references the three-tier plan/scaffold/implementation workflow + escape phrases. -->
 
+## Kit questions — always offer the guide
+When answering any question about the kit, its commands, or "how do I do X with this setup",
+include a pointer to the usage guide at `~/.claude/guide/index.html` (openable in a browser, no
+session needed) and remind that `/kit` answers these questions in conversation. Never cite a
+`plugins/cache/...` path for the guide.
+
 ## Subagent code edits
 <!-- KEEP — generic output-format spec. -->
 
