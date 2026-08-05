@@ -133,9 +133,13 @@ is info-overload-sensitive — keep it scannable; do not paste file bodies.
   individually and the processed ledger is stamped. Candidates you chose not to read are reported as
   unswept in Step 5, never omitted.
 - **`auto_capture_unconfirmed`:** batch them, never one prompt per thread — this backlog runs to
-  double digits, so a per-thread walk is what made it accumulate. Present ONE multiSelect
+  double digits, so a per-thread walk is what made it accumulate. **READ each affected thread's
+  AUTO-marked paragraph (and/or the auto Log entry) FIRST and quote what the capture actually
+  claimed in the message that carries the question** — a slug plus "confirm this auto-capture" is
+  unanswerable; the user cannot confirm content they were never shown (2026-08-05 lesson: both
+  confirms bounced back with "you never showed me"). Then present ONE multiSelect
   `AskUserQuestion` pass listing the affected threads (most-stale first, `med` before `low`), each
-  option labelled with the slug + what the auto-capture claimed, plus a `— none of these —` sentinel.
+  option labelled with the slug + a one-line summary of the claim, plus a `— none of these —` sentinel.
   Respect the popup limits (≤4 options per question, ≤4 questions per call, split rather than
   truncate). For each thread the user ticks, delegate to **`/log confirm <slug>` (3f)**, which is the
   only sanctioned clearer. Guardrails: a thread the user does NOT tick stays marked — silence is not
