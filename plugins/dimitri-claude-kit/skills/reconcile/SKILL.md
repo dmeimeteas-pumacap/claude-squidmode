@@ -1,9 +1,9 @@
 ---
 name: reconcile
-description: "Continuity/cleanliness reconciler with two lanes. SYNC lane: detects drift across the ~/.claude stores (goals.md areas, threads, INDEX, links.tsv) via the shared detect-drift.ps1 engine — plus model-side judgment checks incl. tracker-vs-goals lag via the day sidecar — and resolves it in-session by delegating to /log and /goals modes; deterministic INDEX fixes apply directly. STATUS-UPDATE lane (absorbed from the retired /update-statuses, 2026-07-31): an interactive digest-driven walk-through truing records to reality — tick done thread/goal items, route uncaptured work, recap. Bare /reconcile asks which lane; `/reconcile sync` or `/reconcile status` skips the question. Use when the user says '/reconcile', 'reconcile my state', 'clean up drift', 'fix the stale state', 'sync threads and goals', 'update my statuses', 'check off what's done', 'true up my records', 'run through my threads', or after the session-start banner / mid-session staleness line reports drift. Companion to the passive freshness layer (scheduled headless detector + prompt-time staleness hook) — that layer detects and surfaces; THIS skill writes. NOT /deepclean (filesystem janitor), /log (single-effort capture), /eod (day synthesis)."
+description: "Continuity/cleanliness reconciler with three lanes: make my information accurate to current state across the board. PROPAGATE lane (`/reconcile this`): send a SHORT TEXT MESSAGE to another one of your conversations when something done here changes what that chat should believe, but does not merit a thread Log entry — infers the recipient chat and confirms it, delivered once on that conversation's next prompt, never stored. Use on '/reconcile this', 'propagate this', 'tell the other chat', 'pass this along', 'send this to the other conversation', 'let my other chat know'. SYNC lane: detects drift across the ~/.claude stores (goals.md areas, threads, INDEX, links.tsv) via the shared detect-drift.ps1 engine — plus model-side judgment checks incl. tracker-vs-goals lag via the day sidecar — and resolves it in-session by delegating to /log and /goals modes; deterministic INDEX fixes apply directly. STATUS-UPDATE lane (absorbed from the retired /update-statuses, 2026-07-31): an interactive digest-driven walk-through truing records to reality — tick done thread/goal items, route uncaptured work, recap. Bare /reconcile asks which lane; `/reconcile sync` or `/reconcile status` skips the question. Use when the user says '/reconcile', 'reconcile my state', 'clean up drift', 'fix the stale state', 'sync threads and goals', 'update my statuses', 'check off what's done', 'true up my records', 'run through my threads', or after the session-start banner / mid-session staleness line reports drift. Companion to the passive freshness layer (scheduled headless detector + prompt-time staleness hook) — that layer detects and surfaces; THIS skill writes. NOT /deepclean (filesystem janitor), /log (single-effort capture), /eod (day synthesis)."
 user-invocable: true
 disable-model-invocation: false
-argument-hint: "[sync [<finding-kind>|<slug>] | status]"
+argument-hint: "[sync [<finding-kind>|<slug>] | status | this [to <slug>]]"
 ---
 
 # Reconcile Skill (two lanes: sync + status-update)
@@ -21,16 +21,117 @@ its `accountability/today-goalmap.tsv` sidecar (tracker item ↔ area task).
 ## Step 0 — Resolve the lane
 
 - `/reconcile sync [<kind>|<slug>]` → SYNC lane. `/reconcile status` → STATUS-UPDATE lane.
+  **`/reconcile this [to <slug>]` → PROPAGATE lane.**
 - Bare `/reconcile` (or ambiguous phrasing) → ask once (AskUserQuestion, single-select):
-  **"Synchronization check (drift engine → fix findings) or status update (walk through what you
-  actually did → true up the records)?"** Options: `Sync check` / `Status update` / `Both (sync
-  first)`.
+  **"Sync check (drift engine → fix findings), status update (walk through what you actually did →
+  true up the records), or send a message to another chat?"** Options: `Sync check` / `Status update` /
+  `Message another chat` / `Both (sync first)`.
 - Phrasing that clearly names a lane skips the question: "clean up drift" / "fix stale state" /
   "sync threads and goals" → sync; "update my statuses" / "check off what's done" / "true up my
-  records" / end-of-day phrasing → status.
+  records" / end-of-day phrasing → status; "tell the other chat" / "propagate this" / "pass this
+  along" / "let my other chat know" → propagate.
 
-Both lanes are live-session only where popups are involved; never run the interactive parts
+All lanes are live-session only where popups are involved; never run the interactive parts
 headless.
+
+---
+
+# PROPAGATE lane (`/reconcile this`)
+
+Send a **short text message to another one of your conversations**. Use when something done here
+changes what a different chat should believe, but does not merit a thread Log entry.
+
+Mental model: a text message between two chat clients. **Not** a mailbox, not an inbox, not a record.
+Plan of record: `~/.claude/plans/2026-08-reconcile-propagate-lane.md`.
+
+## Guard FIRST: is this actually a message, or a log entry?
+
+Before anything else. If the update names a **decision with a rationale**, or changes **state that
+outlives today**, say so in one line and offer `/log` instead. Nothing here is recorded, so a
+misrouted log entry is unrecoverable rather than merely misfiled. Send only genuinely transient
+status.
+
+## Step 1 — Identify SELF, and exclude it
+
+The sending conversation is, by construction, both the most-recently-modified transcript and the top
+scorer on the exact terms being propagated. Without explicit self-exclusion this lane will nominate
+the chat the user is sitting in, and confirmation cannot catch that (a candidate labelled "active 1
+minute ago, about the thing we just did" is indistinguishable from the right answer).
+
+`janitor/staleness-seen.json` is keyed by session id and its `touched` field is updated on **every**
+prompt submit, unconditionally. So the entry with the newest `touched` is this conversation. Read it,
+treat it as SELF, and:
+
+- exclude SELF from the candidate set, and
+- **REFUSE** a send addressed to SELF (never "confirm" it), and
+- use it as `from_session`.
+
+If another session submits a prompt in the window, `max(touched)` can flip. It fails visibly (the
+confirm step shows a session the user does not expect), and self-exclusion is by id, not heuristic.
+
+## Step 2 — Pick the recipient
+
+Explicit `/reconcile this to <slug>` skips inference. Otherwise:
+
+1. Enumerate `~/.claude/projects/*/*.jsonl` by mtime; drop SELF.
+2. Rank on the **user's turns only** (`grep -oE '"role":"user","content":"[^"]{0,600}'` into a scratch
+   file, then grep that). Whole-file ranking does not work: the session-start hook injects the EOD
+   recap into every session, so recap topics score high everywhere.
+3. **One `AskUserQuestion` pass** listing the top candidates plus a `— none of these —` sentinel, each
+   labelled by **topic + last-active time, never by UUID** (UUIDs are meaningless to the user).
+4. Sentinel: widen the list once, then abort and say plainly that nothing was sent.
+
+**Confirmation is mandatory when inferred.** A wrong recipient is not noise: it silently tells the
+wrong conversation something true about different work.
+
+## Step 3 — Write the message
+
+`~/.claude/.inbox/<yyyyMMdd-HHmmss>-<from-short>.json` (create `.inbox/` if absent):
+
+```json
+{ "to_session": "<recipient session id>", "from_session": "<self>",
+  "created": "<ISO>", "text": "One to three sentences." }
+```
+
+Body = what changed, and what the recipient should now believe or stop assuming. One to three
+sentences. This is a text message, not a summary.
+
+## Step 4 — Report honestly, and record the send
+
+**Never say "sent" or "delivered"** — there is no delivery signal, ever. Required shape:
+
+> Queued for the AI-tab chat. It lands on that conversation's next prompt, and expires in 4h if that
+> chat is not prompted.
+
+Then append ONE line to `janitor/sweep-log.md`:
+
+```
+- <ISO timestamp>  to=<topic-label> src=propagate
+```
+
+**The message text is never written to that log** — only that a send happened, when, and to which
+chat. That keeps messages ephemeral while making the guard above falsifiable: without it, "am I using
+this lane to dodge `/log`" is unanswerable, the exact blind spot fixed for `unswept_live_session`.
+`to=` is the human topic label, not a UUID. Anything parsing that file must key off `src=`, since a
+propagate row shares only the timestamp and `src=` with a sweep row.
+
+## How delivery actually works (and how it fails)
+
+`janitor/staleness-check.ps1` (`UserPromptSubmit`) TTL-sweeps `.inbox/`, matches `to_session` against
+its own `session_id`, **deletes each file and emits only what is confirmed gone**, under a `[message]`
+prefix, max 3 per turn (mine-first, then capped).
+
+Four ways a message is lost, all accepted or mitigated by design — say so if the user asks, and never
+imply delivery is guaranteed:
+
+1. Target never prompted again before the **4h TTL**. Expires undelivered.
+2. Target `/clear`ed: new session id, address no longer matches.
+3. Hook emits but the receiving model never surfaces it. Unfixable without an ack, and an ack is a store.
+4. A sibling hook blocks the turn (`expand`). **Mitigated:** the hook skips both emit and delete on
+   those prompts, so the message waits for the next one.
+
+If these start mattering in practice, the fix is the persistent-mailbox design in the plan's v1, a
+deliberate reversal — not a gap to patch incrementally.
 
 ---
 

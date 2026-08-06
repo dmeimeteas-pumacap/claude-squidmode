@@ -32,12 +32,13 @@
 </nav>
 
 <div class="lost">
-  <h2>The short version <span>Three things talk to you. Two things run quietly. Nothing edits your records.</span></h2>
+  <h2>The short version <span>Four things talk to you. Two things run quietly. Nothing edits your records.</span></h2>
   <div class="lostcol">
     <h3>Talks to you</h3>
     <ul>
       <li><b>Session-start banner</b> — once, when a session opens.</li>
       <li><b>Staleness note</b> — mid-conversation, when state moved elsewhere.</li>
+      <li><b><code>[message]</code> line</b> — a text you sent from another chat.</li>
       <li><b>Statusline</b> — always, at the bottom.</li>
     </ul>
   </div>
@@ -119,6 +120,31 @@
   <div class="warn"><b>When you see it, re-read the named file before answering anything that depends
   on it.</b> That is the whole point of the note — a stale answer that sounds confident is worse than
   no answer.</div>
+</div>
+
+<!-- =================== inbox message =================== -->
+<div class="entry" id="inbox-message">
+  <h3>The <code>[message]</code> line</h3>
+  <p class="lede">A short text message from another one of your own conversations, delivered by the
+  same prompt-time hook. It appears unprompted, so it is worth knowing what it is.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>Where it comes from</h4>
+      <p>You sent it, from a different chat, with <code>/reconcile this</code> — for when something you
+      just did changes what another conversation should believe, but is not worth a thread entry.</p>
+    </div>
+    <div class="block">
+      <h4>Delivered once, never stored</h4>
+      <p>The message is deleted as it is handed over, and expires on its own after <b>4 hours</b> if
+      that chat is never prompted. Nothing accumulates and nothing is kept, so there is no history of
+      messages to read back later.</p>
+    </div>
+    <div class="block">
+      <h4>It can be lost</h4>
+      <p>No delivery guarantee, by design. A chat you never reopen, or one you clear, simply never gets
+      it. The sending chat is told it was queued, never that it arrived.</p>
+    </div>
+  </div>
 </div>
 
 <!-- =================== detector =================== -->
@@ -235,7 +261,7 @@
 
 <p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
 
-<p class="vstamp">Claude Kit v0.1.9.1 &middot; 19 commands &middot; open these files any time, no session required</p>
+<p class="vstamp">Claude Kit v0.1.10 &middot; 19 commands &middot; open these files any time, no session required</p>
 
 </body>
 </html>

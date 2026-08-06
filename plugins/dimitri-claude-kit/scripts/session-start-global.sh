@@ -586,35 +586,17 @@ fi
 # threads, so the nudge still shows on a thread-less session. Suppressed for a fresh
 # recipient (FRESH_USER) -- they get the /tutorial nudge, not a /today prompt with no context yet.
 # EVERY session, not just the first of the day (the FIRST_SESSION_TODAY gate was dropped
-# 2026-08-06): the verb below now resolves from the store, so a later session gets a useful
-# `show` pointer instead of nothing at all.
+# 2026-08-06).
 # LAST in the banner by design: it is the only accent-bright line down here, so it sits
 # below the dim drift/owed/guide lines rather than outshining them from above.
-# The verb depends on the day store: a plan already set for TODAY means the useful action
-# is viewing it (`/today show`), not planning again.
+# One bare `/today` verb, not a store-resolved show/set split (2026-08-06): the skill routes
+# see-vs-set itself, so the banner does not need to guess.
 if [ "$FRESH_USER" != "1" ]; then
-  # Day store header is "# Today's Intent - YYYY-MM-DD"; scan the first few lines so a
-  # leading blank does not defeat the check.
-  PLAN_IS_TODAY=0
-  DAY_STORE="$CLAUDE_DIR/accountability/today.md"
-  if [ -f "$DAY_STORE" ]; then
-    _n=0
-    while [ "$_n" -lt 5 ] && IFS= read -r _ln; do
-      _n=$((_n + 1))
-      case "$_ln" in
-        \#*Today*) case "$_ln" in *"$TODAY"*) PLAN_IS_TODAY=1 ;; esac; break ;;
-      esac
-    done < "$DAY_STORE"
-  fi
   _W_RESET=$'\033[0m'
   _W_ACCENT=$'\033[38;2;177;185;249m'
   _W_DIM=$'\033[2m'
   _W_NL=$'\n'
-  if [ "$PLAN_IS_TODAY" = "1" ]; then
-    BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ /today show${_W_RESET}${_W_DIM} to see the day's plan (standing areas: /goals)${_W_RESET}${_W_NL}"
-  else
-    BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ /today set${_W_RESET}${_W_DIM} to plan the day (standing areas: /goals)${_W_RESET}${_W_NL}"
-  fi
+  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ /today${_W_RESET}${_W_DIM} to see/set the day's tasks (generalized goals: /goals)${_W_RESET}${_W_NL}"
 fi
 
 # Normal-path marker write: the recap banner was rendered by this hook directly (no

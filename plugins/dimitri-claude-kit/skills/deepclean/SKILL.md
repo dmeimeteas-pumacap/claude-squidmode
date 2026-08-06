@@ -29,6 +29,8 @@ Never propose deleting or moving harness-managed state. Treat these as read-only
 `projects/`, `file-history/`, `plugins/`, `sessions/`, `shell-snapshots/`, `paste-cache/`,
 `history.jsonl`, `.credentials.json`, `daemon/` keys + `daemon.*`, `.rate-limit-state.json`,
 `policy-limits.json`, `statusline.ps1`, `settings.json`, `settings.local.json`, `themes/`,
+`.inbox/` (PROPAGATE-lane message transport: self-sweeping on a 4h TTL and deleted on delivery, so
+there is nothing to curate and a manual sweep would silently destroy an undelivered message),
 `cache/`, `backups/`, `downloads/`, `session-env/`, `.run-from/` (kit-hook state,
 self-pruning by design), `.kit-install-receipt.json` (LOAD-BEARING — the session-start
 FRESH_USER/tutorial gate reads it; deleting it breaks onboarding), `remote-settings.json`,

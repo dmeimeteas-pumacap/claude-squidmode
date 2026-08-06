@@ -319,12 +319,20 @@ function Install-UsageGuide {
   if (-not $fresh) {
     $same = $false
     try {
+      # -ErrorAction SilentlyContinue, not the ambient -Stop: a locked page otherwise writes a raw
+      # PowerShell error record to stderr even though the catch below handles it, so the user saw a
+      # friendly [SKIPPED] line AND a red stack trace for the same event (0.1.9.1 finding R5-5).
+      # A null hash means unreadable, which counts as "changed" and falls through to the guarded copy.
       $dstRootCmp = (Get-Item $dst).FullName.TrimEnd('\','/')
       $srcMap = @{}; $dstMap = @{}
-      foreach ($f in @(Get-ChildItem $src -Recurse -File)) { $srcMap[(& $rel $srcRoot $f)] = (Get-FileHash $f.FullName -Algorithm SHA256).Hash }
-      foreach ($f in @(Get-ChildItem $dst -Recurse -File)) { $dstMap[(& $rel $dstRootCmp $f)] = (Get-FileHash $f.FullName -Algorithm SHA256).Hash }
+      foreach ($f in @(Get-ChildItem $src -Recurse -File)) { $srcMap[(& $rel $srcRoot $f)] = (Get-FileHash $f.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash }
+      foreach ($f in @(Get-ChildItem $dst -Recurse -File)) { $dstMap[(& $rel $dstRootCmp $f)] = (Get-FileHash $f.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash }
       $same = $srcMap.Count -eq $dstMap.Count
-      if ($same) { foreach ($k in $srcMap.Keys) { if ($dstMap[$k] -ne $srcMap[$k]) { $same = $false; break } } }
+      if ($same) {
+        foreach ($k in $srcMap.Keys) {
+          if (-not $srcMap[$k] -or -not $dstMap[$k] -or ($dstMap[$k] -ne $srcMap[$k])) { $same = $false; break }
+        }
+      }
     } catch { $same = $false }
     if ($same) {
       $script:Receipt.usageGuide = 'guide (unchanged)'
@@ -404,8 +412,23 @@ function Install-ExternalPlugins {
     $script:Report.Add("[MANUAL] Optional enhancements -- install yourself: $cmds")
     return
   }
-  if (-not $NonInteractive) {
-    $ans = Read-Host "Install optional enhancement plugins ($(($deps.Name) -join ', '))? (Y/n)"
+  # A bare Read-Host in a non-interactive host (CI, a scripted install, `powershell -NonInteractive`)
+  # THROWS under the script-wide -Stop preference, aborting the installer after the statusline and
+  # settings work with no summary and a stale receipt -- the identical failure shape N1 fixed in the
+  # guide block (0.1.9.1 finding R5-4).
+  # MEASURED: [Environment]::UserInteractive returns TRUE under `powershell -NonInteractive`, so the
+  # cheap host check does NOT catch that case -- the try/catch below is the load-bearing fix, and the
+  # UserInteractive branch only helps in a genuinely non-interactive context (a service, no window
+  # station). Keep both; do not "simplify" by deleting the catch.
+  if (-not $NonInteractive -and -not [Environment]::UserInteractive) {
+    $script:Report.Add("[SKIPPED] optional-plugin prompt (non-interactive host detected; installing deps merge-safely as if -NonInteractive).")
+  } elseif (-not $NonInteractive) {
+    $ans = $null
+    try { $ans = Read-Host "Install optional enhancement plugins ($(($deps.Name) -join ', '))? (Y/n)" }
+    catch {
+      $script:Report.Add("[SKIPPED] optional-plugin prompt could not be shown ($($_.Exception.Message.Split([char]10)[0])). Continuing; re-run with -NonInteractive to silence this.")
+      return
+    }
     if ($ans -match '^(n|no)$') { $script:Report.Add("[SKIPPED] external enhancement plugins (declined)."); return }
   }
   foreach ($d in $deps) {

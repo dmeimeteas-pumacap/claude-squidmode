@@ -27,10 +27,23 @@ $ErrorActionPreference = 'SilentlyContinue'   # a hook must never block the prom
 
 # --- hook input (session_id) ---
 $sessionId = 'unknown'
+$promptText = ''
 try {
     $raw = [Console]::In.ReadToEnd()
-    if ($raw) { $o = $raw | ConvertFrom-Json; if ($o.session_id) { $sessionId = [string]$o.session_id } }
+    if ($raw) {
+        $o = $raw | ConvertFrom-Json
+        if ($o.session_id) { $sessionId = [string]$o.session_id }
+        if ($o.prompt) { $promptText = [string]$o.prompt }
+    }
 } catch {}
+
+# --- inbox (PROPAGATE lane transport) constants ---
+# TTL is deliberately short: a status update is only useful while both chats are still in play.
+$INBOX_TTL_HOURS = 4
+# Prompts a SIBLING UserPromptSubmit hook answers with {"decision":"block"}. On those turns the
+# prompt is discarded, so anything emitted here is never seen -- deliver nothing and delete nothing,
+# or the message dies unread. Keep in sync with hooks/expand-prompt.sh.
+$INBOX_BLOCKING_PROMPTS = @('expand')
 
 $janitorDir = Join-Path $ClaudeDir 'janitor'
 if (-not (Test-Path $janitorDir)) { try { New-Item -ItemType Directory -Path $janitorDir -Force | Out-Null } catch {} }
@@ -123,11 +136,61 @@ try {
     }
 } catch {}
 
+# --- inbox: messages sent to THIS conversation by /reconcile this (PROPAGATE lane) ---
+# Transport, not a store: one JSON file per message, addressed by to_session, deleted on delivery,
+# age-swept. Nothing here is durable and nothing accumulates.
+$msgs = @()
+try {
+    $inboxDir = Join-Path $ClaudeDir '.inbox'
+    if (Test-Path $inboxDir) {
+        # 1. TTL sweep first, so an expired message can never be delivered. Non-recursive by design.
+        $cutoff = $now.AddHours(-$INBOX_TTL_HOURS)
+        foreach ($f in @(Get-ChildItem $inboxDir -Filter '*.json' -File)) {
+            if ($f.LastWriteTime -lt $cutoff) { Remove-Item $f.FullName -Force }
+        }
+        # 2. Bail out entirely when a sibling hook will block this turn (see $INBOX_BLOCKING_PROMPTS).
+        $bare = $promptText.Trim().ToLower()
+        if ($INBOX_BLOCKING_PROMPTS -notcontains $bare) {
+            # 3. Select MINE first, then cap at 3 per turn. Order matters: capping the raw listing
+            #    first lets messages addressed to OTHER sessions (which this turn can never deliver)
+            #    consume the quota, starving mine indefinitely behind other conversations' mail.
+            #    Caught in test with 2 undeliverable files sorting ahead of a deliverable one.
+            $mineFiles = @()
+            foreach ($f in @(Get-ChildItem $inboxDir -Filter '*.json' -File | Sort-Object Name)) {
+                $m = $null
+                try { $m = Get-Content $f.FullName -Raw | ConvertFrom-Json } catch { $m = $null }
+                if (-not $m -or -not $m.to_session -or -not $m.text) { continue }
+                if ([string]$m.to_session -ne $sessionId) { continue }
+                $mineFiles += [pscustomobject]@{ File = $f; Text = [string]$m.text }
+            }
+            foreach ($item in @($mineFiles | Select-Object -First 3)) {
+                $f = $item.File
+                # 4. DELETE FIRST, emit only what is confirmed gone. This script runs under
+                #    SilentlyContinue, so an emit-then-delete order would let a transient lock leave
+                #    the file in place with no error and re-inject the same message every prompt for
+                #    the whole TTL. Nagging repetition is worse than the silent loss this design
+                #    already accepts, so a failed delete must produce silence instead.
+                Remove-Item $f.FullName -Force
+                if (-not (Test-Path $f.FullName)) { $msgs += $item.Text }
+            }
+        }
+    }
+} catch {}
+
 # --- emit ---
-if ($changed.Count -eq 0 -and -not $driftNote) { exit 0 }
-$lines = @('[staleness-check] State moved outside this conversation. Re-read the named file(s) before relying on prior context; /reconcile resolves drift.')
-if ($changed.Count -gt 0) { $lines += ('Changed since this session last looked: ' + ($changed -join '; ')) }
-if ($driftNote) { $lines += $driftNote }
+if ($changed.Count -eq 0 -and -not $driftNote -and $msgs.Count -eq 0) { exit 0 }
+$lines = @()
+# Messages lead: they are addressed to a person, not derived state, and the staleness preamble
+# talks about files rather than about someone sending you something.
+if ($msgs.Count -gt 0) {
+    $lines += '[message] From another conversation of yours (delivered once, not stored). Surface this to the user before answering:'
+    foreach ($t in $msgs) { $lines += ('  - ' + $t) }
+}
+if ($changed.Count -gt 0 -or $driftNote) {
+    $lines += '[staleness-check] State moved outside this conversation. Re-read the named file(s) before relying on prior context; /reconcile resolves drift.'
+    if ($changed.Count -gt 0) { $lines += ('Changed since this session last looked: ' + ($changed -join '; ')) }
+    if ($driftNote) { $lines += $driftNote }
+}
 $payload = @{ hookSpecificOutput = @{ hookEventName = 'UserPromptSubmit'; additionalContext = ($lines -join "`n") } }
 $payload | ConvertTo-Json -Depth 4 -Compress
 exit 0
