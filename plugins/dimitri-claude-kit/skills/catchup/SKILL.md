@@ -112,6 +112,13 @@ After reading, brief in a few sentences, not a file dump:
 - Whether the freshness sweep ran, and any sessions left **unswept**. Say "swept, nothing newer" or
   name the UUIDs you did not read. Never let a brief imply completeness the sweep did not establish.
 
+**Whenever the sweep ran, append ONE line to `~/.claude/janitor/sweep-log.md`** (create with an
+`# Sweep log` header if absent) — same format `/reconcile` Step 5 writes, with `src=catchup`:
+`- <ISO timestamp>  cand=<N> read=<N> found=<N> persisted=<N> deferred=<N>  threads=<slug>  src=catchup`
+A sweep leaves no other artifact once the conversation ends, so without this line there is no way to
+tell later whether the freshness layer is actually firing. Skip the line only when the sweep was
+legitimately skipped (a same-day pickup that needed none) — do not write a fake zero row for it.
+
 Then offer the verbose escape hatch: "Say `view` to see the complete detail." On `view`,
 escalate the read one tier if needed (Tier 0 → Tier 1) and print, **verbatim and untruncated**: the
 full `## Where I left off` paragraph, **every** `## Next` item, the **entire `## Decisions`**

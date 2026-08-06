@@ -132,6 +132,14 @@ is info-overload-sensitive — keep it scannable; do not paste file bodies.
   found work into it. If several sessions hit one thread, prefer `/logall` so each is walked
   individually and the processed ledger is stamped. Candidates you chose not to read are reported as
   unswept in Step 5, never omitted.
+  **`/logall` here means RUN IT NOW, in this session — it is the routing mechanism, not a deferral.**
+  "It can wait for tonight's `/logall eod`" is the failure mode this whole class exists to prevent:
+  the finding then dies with the conversation and the next session re-derives it from scratch. (Hit
+  live 2026-08-05: a sweep found 4 unlogged sessions and every one was deferred to the evening run,
+  which read as satisfying "prefer `/logall`" while violating the persist-in-the-same-run guardrail
+  above.) If the USER explicitly chooses to defer, that overrides — but then the Step-5 report must
+  name each deferred session as **unpersisted**, not merely "swept". A deferred sweep is an open
+  finding, so leave the drift unresolved rather than reporting the lane clean.
 - **`auto_capture_unconfirmed`:** batch them, never one prompt per thread — this backlog runs to
   double digits, so a per-thread walk is what made it accumulate. **READ each affected thread's
   AUTO-marked paragraph (and/or the auto Log entry) FIRST and quote what the capture actually
@@ -173,10 +181,28 @@ is info-overload-sensitive — keep it scannable; do not paste file bodies.
 - **`memory_index_drift`:** missing file → remove the stale pointer; unpointed file → add a
   one-line pointer. Confirm direction.
 
-### Step 5 — Re-emit + report
+### Step 5 — Re-emit + report + leave a trace
 Re-run `detect-drift.ps1 -Quiet` so the report (and the banner/hook count) reflects the fixes.
 Report applied vs deferred, **plus any live sessions left unswept** (UUID + why). A clean report with
 unswept sessions behind it is a partial result, so say so rather than declaring the stores clean.
+
+**Then append ONE line to `~/.claude/janitor/sweep-log.md`** (create with an `# Sweep log` header if
+absent), tab-separated:
+
+```
+- <ISO timestamp>  cand=<N> read=<N> found=<N> persisted=<N> deferred=<N>  threads=<slug,slug>  src=reconcile
+```
+
+Why this exists: `unswept_live_session` is model-side judgment, so unlike every deterministic finding
+it writes NOTHING to `drift-latest.json` and leaves no artifact once the conversation ends. That made
+the cross-conversation sweep — the whole point of the 0.1.7 bump — structurally unmeasurable: 218
+detector runs of history could show the deterministic half catching 219 INDEX drifts and say literally
+nothing about whether the sweep ever fired. One line per sweep fixes that, and it is the honest way to
+answer "is this machinery doing anything, or have I just gotten better at not desyncing?" — which
+needs a few weeks of rows, not an opinion. `cand` = candidates the mtime scan produced, `read` = how
+many you actually read (never let this silently equal `cand`), `found` = held real unlogged work,
+`persisted` = written to a thread THIS run, `deferred` = user-overridden. Zeroes are informative;
+write the line even when nothing was found.
 
 ---
 
