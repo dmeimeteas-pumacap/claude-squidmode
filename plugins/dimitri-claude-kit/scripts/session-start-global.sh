@@ -546,19 +546,6 @@ summarize it in one short paragraph and remind the user to run \`/today\` to pla
 "
 fi
 
-# First-session call to action. The recap above shows where you left off; the day's
-# plan is yours to set, so nudge /today (the DAY door since the 2026-07-31 two-door split).
-# Appending to BANNER_CONTENT also forces the systemMessage branch below even with no
-# threads, so the nudge still shows on a thread-less first session. Suppressed for a fresh
-# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /today prompt with no context yet.
-if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$FRESH_USER" != "1" ]; then
-  _W_RESET=$'\033[0m'
-  _W_ACCENT=$'\033[38;2;177;185;249m'
-  _W_DIM=$'\033[2m'
-  _W_NL=$'\n'
-  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ Run /today${_W_RESET}${_W_DIM} to plan the day (standing areas: /goals)${_W_RESET}${_W_NL}"
-fi
-
 # Continuity-janitor drift surface: one dim line when the detector has cached findings.
 # Reads ONLY the cached JSON (no powershell spawn at startup); the "as of" timestamp makes a
 # stale cache self-evident. Suppressed on the first-session recovery path (/today owns the CTA there).
@@ -591,6 +578,43 @@ GUIDE_INDEX="$CLAUDE_DIR/guide/index.html"
 if [ -f "$GUIDE_INDEX" ]; then
   _G_RESET=$'\033[0m'; _G_DIM=$'\033[2m'; _G_ACCENT=$'\033[38;2;124;130;174m'; _G_NL=$'\n'
   BANNER_CONTENT="${BANNER_CONTENT}${_G_NL}  ${_G_DIM}─ guide: ${_G_RESET}${_G_ACCENT}~/.claude/guide/index.html${_G_RESET}${_G_DIM} (browser, no session) · or ask ${_G_RESET}${_G_ACCENT}/kit${_G_RESET}${_G_NL}"
+fi
+
+# Day-plan call to action. The recap above shows where you left off; the day's plan is
+# yours to set, so nudge /today (the DAY door since the 2026-07-31 two-door split).
+# Appending to BANNER_CONTENT also forces the systemMessage branch below even with no
+# threads, so the nudge still shows on a thread-less session. Suppressed for a fresh
+# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /today prompt with no context yet.
+# EVERY session, not just the first of the day (the FIRST_SESSION_TODAY gate was dropped
+# 2026-08-06): the verb below now resolves from the store, so a later session gets a useful
+# `show` pointer instead of nothing at all.
+# LAST in the banner by design: it is the only accent-bright line down here, so it sits
+# below the dim drift/owed/guide lines rather than outshining them from above.
+# The verb depends on the day store: a plan already set for TODAY means the useful action
+# is viewing it (`/today show`), not planning again.
+if [ "$FRESH_USER" != "1" ]; then
+  # Day store header is "# Today's Intent - YYYY-MM-DD"; scan the first few lines so a
+  # leading blank does not defeat the check.
+  PLAN_IS_TODAY=0
+  DAY_STORE="$CLAUDE_DIR/accountability/today.md"
+  if [ -f "$DAY_STORE" ]; then
+    _n=0
+    while [ "$_n" -lt 5 ] && IFS= read -r _ln; do
+      _n=$((_n + 1))
+      case "$_ln" in
+        \#*Today*) case "$_ln" in *"$TODAY"*) PLAN_IS_TODAY=1 ;; esac; break ;;
+      esac
+    done < "$DAY_STORE"
+  fi
+  _W_RESET=$'\033[0m'
+  _W_ACCENT=$'\033[38;2;177;185;249m'
+  _W_DIM=$'\033[2m'
+  _W_NL=$'\n'
+  if [ "$PLAN_IS_TODAY" = "1" ]; then
+    BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ /today show${_W_RESET}${_W_DIM} to see the day's plan (standing areas: /goals)${_W_RESET}${_W_NL}"
+  else
+    BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ /today set${_W_RESET}${_W_DIM} to plan the day (standing areas: /goals)${_W_RESET}${_W_NL}"
+  fi
 fi
 
 # Normal-path marker write: the recap banner was rendered by this hook directly (no

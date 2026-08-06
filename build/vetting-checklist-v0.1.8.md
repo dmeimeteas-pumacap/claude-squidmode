@@ -11,6 +11,21 @@ is not a downgrade tool; uninstall the plugin first, then reinstall.
 
 ---
 
+## PRECONDITION — restart, then PROVE the restart took
+
+**Restart Claude Code after the rebuild. Skill and hook changes are not picked up mid-session, and
+`/clear` does not reload them.** Then assert it, rather than assuming: read the installed leaf's
+`scripts/.kit-version`, and have the session quote a string that exists ONLY in the build under test
+from a skill it loaded. If the session's copy predates the build, stop and restart.
+
+Why this is a hard gate, not hygiene: in round 4 (v0.1.9) the tester's session opened at 10:13 and the
+skills were rebuilt at 14:10-14:47, so every skill invoked served the **previous** build. It was caught
+only by diffing session-loaded text against disk. A stale session grades the wrong build and reports
+false passes — the worst possible outcome for a vetting round, and it silently blocked the one check
+(the cross-conversation sweep) that exists to prevent confidently-wrong results.
+
+---
+
 ## PART 0 — SANDBOX-BLOCKED (run these first; they gate later work)
 
 These cannot be verified from the author account. Everything below Part 0 assumes they passed.

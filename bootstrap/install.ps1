@@ -289,18 +289,79 @@ function Install-ThemeCommand {
 # that path only. This is a copy of a shipped artifact, never a second authored source -- it is
 # overwritten wholesale on re-install, and there is nothing in it a user would edit.
 # ---------------------------------------------------------------------------
+# N1 (0.1.9.1): this refresh used to Remove-Item -Recurse the whole guide dir on every run. Under the
+# script-wide $ErrorActionPreference='Stop' a locked dir (a terminal parked in guide/, a page open in
+# an editor -- the kit TELLS people to open these) threw and aborted the entire installer AFTER the
+# statusline + settings work, so the receipt was never written and the run failed silently.
+# Fixed three ways: (1) no-op when content already matches, so the common re-run touches nothing;
+# (2) copy OVER the top + sweep orphans instead of delete-then-recreate, so holding the directory
+# open no longer blocks anything; (3) the whole thing is non-fatal -- a failure reports and lets the
+# install finish, receipt included.
 function Install-UsageGuide {
   $src = Join-Path $PkgRoot 'plugins/dimitri-claude-kit/guide'
   if (-not (Test-Path $src)) { $script:Report.Add("[SKIPPED] usage guide not present in the package."); return }
   $dst = Join-Path $ClaudeDir 'guide'
   $fresh = -not (Test-Path $dst)
-  if (-not $fresh) { Remove-Item $dst -Recurse -Force }
-  New-Item -ItemType Directory -Path $dst -Force | Out-Null
-  Copy-Item (Join-Path $src '*') $dst -Recurse -Force
-  $n = @(Get-ChildItem $dst -Filter '*.html' -File).Count
-  $script:Receipt.usageGuide = 'guide'
-  $verb = if ($fresh) { 'INSTALLED' } else { 'REFRESHED' }
-  $script:Report.Add("[$verb] guide/ -- $n pages. Open $dst\index.html in a browser; no Claude session needed.")
+
+  # Relative-path keys MUST come from a root normalized the same way Get-ChildItem normalizes
+  # FullName, or the Substring offset is wrong and every key mismatches. Caught in test: -ClaudeDir
+  # given as an 8.3 short path ('...\DMEIME~1\...') while FullName expands to the long name, which
+  # made the orphan sweep below delete the files it had just copied. (Get-Item).FullName expands
+  # short names and settles separators/trailing slashes for both sides.
+  $rel = { param($Root, $F) $F.FullName.Substring($Root.Length).TrimStart('\','/') }
+  $srcRoot = (Get-Item $src).FullName.TrimEnd('\','/')
+
+  # Content compare (relative path + hash). Identical -> nothing to do; never open the write window.
+  # MUST be non-fatal: Get-FileHash on a locked page throws under the script-wide -Stop preference,
+  # which would abort the installer before the receipt is written -- the very N1 failure this function
+  # exists to fix, just moved earlier. Caught in test with an exclusive handle on index.html. On any
+  # read failure, fall through as "changed" and let the guarded copy below report it.
+  if (-not $fresh) {
+    $same = $false
+    try {
+      $dstRootCmp = (Get-Item $dst).FullName.TrimEnd('\','/')
+      $srcMap = @{}; $dstMap = @{}
+      foreach ($f in @(Get-ChildItem $src -Recurse -File)) { $srcMap[(& $rel $srcRoot $f)] = (Get-FileHash $f.FullName -Algorithm SHA256).Hash }
+      foreach ($f in @(Get-ChildItem $dst -Recurse -File)) { $dstMap[(& $rel $dstRootCmp $f)] = (Get-FileHash $f.FullName -Algorithm SHA256).Hash }
+      $same = $srcMap.Count -eq $dstMap.Count
+      if ($same) { foreach ($k in $srcMap.Keys) { if ($dstMap[$k] -ne $srcMap[$k]) { $same = $false; break } } }
+    } catch { $same = $false }
+    if ($same) {
+      $script:Receipt.usageGuide = 'guide (unchanged)'
+      $script:Report.Add("[UNCHANGED] guide/ -- already current ($($srcMap.Count) files). Open $dst\index.html in a browser; no Claude session needed.")
+      return
+    }
+  }
+
+  try {
+    New-Item -ItemType Directory -Path $dst -Force | Out-Null
+    Copy-Item (Join-Path $src '*') $dst -Recurse -Force   # overwrite in place; no dir delete
+    # Sweep files the package no longer ships (a renamed/removed page would otherwise linger).
+    $keep = @{}
+    foreach ($f in @(Get-ChildItem $src -Recurse -File)) { $keep[(& $rel $srcRoot $f)] = $true }
+    # Safety: an empty keep-set can only mean the key derivation broke, never "the package ships no
+    # guide files" (Test-Path above already proved otherwise). Deleting on that basis would wipe the
+    # guide, so skip the sweep instead -- a stale leftover is strictly cheaper than a wrong delete.
+    if ($keep.Count -gt 0) {
+      $dstRoot = (Get-Item $dst).FullName.TrimEnd('\','/')
+      foreach ($f in @(Get-ChildItem $dst -Recurse -File)) {
+        $r = & $rel $dstRoot $f
+        if (-not $keep.ContainsKey($r)) {
+          try { Remove-Item $f.FullName -Force } catch { $script:Report.Add("[WARN] guide/: could not remove stale '$r' ($($_.Exception.Message)).") }
+        }
+      }
+    } else {
+      $script:Report.Add("[WARN] guide/: orphan sweep skipped (could not derive relative paths).")
+    }
+    $n = @(Get-ChildItem $dst -Filter '*.html' -File).Count
+    $script:Receipt.usageGuide = 'guide'
+    $verb = if ($fresh) { 'INSTALLED' } else { 'REFRESHED' }
+    $script:Report.Add("[$verb] guide/ -- $n pages. Open $dst\index.html in a browser; no Claude session needed.")
+  } catch {
+    # NEVER fatal: the guide is a convenience copy, and aborting here loses the install receipt.
+    $script:Receipt.usageGuide = "failed: $($_.Exception.Message)"
+    $script:Report.Add("[SKIPPED] guide/ could not be written -- something is holding it open (a terminal parked in guide\, or a page open in an editor). Close it and re-run the installer; everything else installed normally. ($($_.Exception.Message))")
+  }
 }
 
 # ---------------------------------------------------------------------------

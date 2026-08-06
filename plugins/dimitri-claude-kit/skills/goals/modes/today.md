@@ -11,10 +11,19 @@ Invoked three ways: directly (`/today`), as the closing step of the plan submode
 freshly distilled primary + musts), and conversationally ("add a task", "check off #3", "declare my
 day" — the verbs in step 5).
 
+**The two explicit verbs are `set` and `show`.** `set` makes the day's plan (step 2), `show` relays
+it (step 1). Bare `/today` is NOT a synonym for either — it **resolves by store state**: `show` when
+the store's header date is `<DATE>`, `set` when the store is stale or missing, because a stale store
+holds no plan for today and there is nothing to show. `/today show` against a stale store does not
+silently print yesterday: say the store is stale (give its date), then offer `set`.
+
 ## Store format (`accountability/today.md`)
 
 ```markdown
 # Today's Intent - YYYY-MM-DD
+
+## Quickstart
+- [ ] {▸} <small first-thing task>   (optional section; omit it when there is none)
 
 ## Primary
 - [ ] {★} <the day's primary>
@@ -25,9 +34,13 @@ day" — the verbs in step 5).
   - [ ] {●} <sub-item>        (4-space-indented children nest under the item above)
 ```
 
+- **`## Quickstart` sits ABOVE `## Primary`** — it is the first thing to do, so it is the first
+  thing to read, and by definition it holds the smaller, less impactful items. Optional: omit the
+  whole section on a day with no quickstart rather than leaving it empty.
 - One `{glyph}` per item (the board legend: `▸ ★ ● ◐ ◇ ○ ▽ ▲`); the primary is always `{★}`.
 - **Item ids are positional, and sub-items are LETTERED under their parent**: top-level items take
-  numbers in file order (1 = the Primary item, then each top-level Musts line); a parent's children
+  numbers in file order (so a Quickstart item is 1 when the section is present, then the Primary,
+  then each top-level Musts line); a parent's children
   take a BARE `a`, `b`, `c`… restarting at `a` under every parent — render them as just `a.`, not
   `1a`/`3a`. The parent number is already visually above them, and the user names the parent when
   referring to a letter. Sub-items never consume a top-level number. Always render the ids — they
