@@ -206,6 +206,23 @@ function Install-ClaudeTemplate { param([string] $TemplatePath, [string] $Target
     Copy-Item $TemplatePath $alt -Force
     $script:Receipt.claudeMd = 'left intact; template dropped as CLAUDE.kit-template.md'
     $script:Report.Add("[SKIPPED] CLAUDE.md left intact. Kit template dropped at CLAUDE.kit-template.md -- merge the behavioral sections by hand if you want them.")
+    # R5-11 (0.1.10): say WHICH sections they are missing, by name. Still no merge -- never touching a
+    # user's CLAUDE.md is the invariant -- but silence here meant an upgrading user whose CLAUDE.md is
+    # itself an older copy of this template never learned a new section existed. Measured in the
+    # sandbox: a behavioural rule added in 0.1.9 (offer the guide + /kit) never reached that profile,
+    # and the vetting round failed the check that rule was written to satisfy.
+    try {
+      $hdr = { param($P) @(Select-String -Path $P -Pattern '^##\s+(.+?)\s*$' |
+                           ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }) }
+      $tmplSections = & $hdr $TemplatePath
+      $userSections = & $hdr $TargetPath
+      $missing = @($tmplSections | Where-Object { $userSections -notcontains $_ })
+      if ($missing.Count) {
+        $script:Receipt.claudeMdMissingSections = $missing
+        $shown = if ($missing.Count -le 4) { $missing -join '; ' } else { (($missing | Select-Object -First 4) -join '; ') + "; +$($missing.Count - 4) more" }
+        $script:Report.Add("[REVIEW] Your CLAUDE.md is missing $($missing.Count) section(s) the kit template now carries: $shown. These are behavioural rules the kit's skills assume -- copy the ones you want from CLAUDE.kit-template.md.")
+      }
+    } catch {}
   } else {
     Copy-Item $TemplatePath $TargetPath -Force
     $script:Receipt.claudeMd = 'installed (was absent)'

@@ -181,18 +181,33 @@ Using live conversation + file context, additionally look for the judgment-only 
      `*.jsonl` not recorded in `threads/.logall-processed.tsv` is a candidate. Skip to step 4 with
      those candidates and emit one `unswept_live_session` finding naming each unlogged session
      (suggest `/logall`, or `/log new` for the first thread, as the resolution).**
-  2. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** that date
+  2. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **on or after** that date
      (subagent transcripts under `*/subagents/` count as part of their parent session, not separately).
-     Sessions older than every thread's `last_touched` but absent from `.logall-processed.tsv` are
-     still candidates — a thread date never bounds work that predates the thread.
-  3. Keyword-grep the candidates for the thread's `topic`/`tags`/title terms to rank them — but
-     **rank on the USER's turns only**, e.g. `grep -oE '"role":"user","content":"[^"]{0,600}'` into a
-     scratch file first, then grep that. Ranking whole transcripts does not work: the session-start
-     hook injects the EOD recap into EVERY session, so recap topics score high everywhere. (Measured
-     on this check's first live run: five unrelated sessions all scored 600-1900 on export-kit terms
-     from the whole file, and separated cleanly the moment ranking moved to user turns.)
-  4. Read the ranked candidates, or **explicitly flag them as unswept** if you do not. Never let an
-     unread candidate pass as covered.
+     **On-or-after, not after:** `last_touched` is date-granular, so an exclusive comparison silently
+     drops every same-day session, and "two sessions on one effort in one day, the second unlogged" is
+     the most common real gap there is. Sessions older than every thread's `last_touched` but absent
+     from `.logall-processed.tsv` are still candidates — a thread date never bounds work that predates
+     the thread.
+  3. **Correlate artifacts before reading anything (free, and the signal that actually works).** Files
+     changed after `last_touched` under the effort's repo/project paths, and under per-session
+     scratchpads at `%TEMP%\claude\<project-key>\<session-id>\scratchpad` — **that path carries the
+     session id in its directory name**, so a changed file there identifies its session with no
+     transcript read. A hit here is decisive; skip step 4.
+  4. Only if step 3 is inconclusive, keyword-rank — **on the USER's turns only**, e.g. `grep -oE
+     '"role":"user","content":"[^"]{0,600}'` into a scratch file first, then grep that. Ranking whole
+     transcripts does not work: the session-start hook injects the EOD recap into EVERY session, so
+     recap topics score high everywhere. (Measured on this check's first live run: five unrelated
+     sessions all scored 600-1900 on export-kit terms from the whole file, and separated cleanly the
+     moment ranking moved to user turns.) **This is A signal, not THE signal** — it returned nothing
+     useful in the one unrehearsed trial, because the session holding the work talked about *kit
+     testing* and never named the effort. Keyword ranking separating nothing is an expected outcome,
+     not a reason to read every candidate.
+  5. **Read at most the top 3**, or **explicitly flag candidates as unswept** if you do not. Never let
+     an unread candidate pass as covered. Reading all of them is a failure of this step: measured
+     2026-08-07, an unrehearsed run read 8 transcripts to surface one changed file.
+     **Narrate before a slow check** (one line: what you are reading and why) and surface confirmed
+     findings as they land, rather than holding everything for one final answer. Hold back only what a
+     later step could reshape — never report "stores are clean" before the sweep finishes.
   Emit a finding naming the thread, the session UUID, and what the session appears to hold that the
   thread does not. A session already recorded in `threads/.logall-processed.tsv` is not a candidate.
   **Never answer a state question ("what is left", "where are we", "did we resolve X") from

@@ -82,19 +82,46 @@ A thread file records what was WRITTEN. A concurrent conversation that has not l
 in it, so briefing straight off `## Where I left off` can hand back a confidently stale answer. Before
 briefing, run a cheap freshness sweep on the resolved thread:
 
-1. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **after** the thread's
-   `last_touched` (subagent files under `*/subagents/` belong to their parent session).
-2. Keyword-grep them for the thread's `topic`/`tags`/title terms and rank — **on the USER's turns
-   only** (`grep -oE '"role":"user","content":"[^"]{0,600}'` into a scratch file, then grep that).
-   Whole-transcript ranking is useless here: the session-start hook injects the EOD recap into every
-   session, so recap topics score high in sessions that never touched them.
-3. Read the top candidates, or name them as **unswept** in the briefing. An unread candidate is never
-   reported as covered.
-4. Skip any session already listed in `threads/.logall-processed.tsv`.
+**Budget: read at most 3 transcripts.** Cost discipline comes first, because this fires on ordinary
+questions and transcript reads are slow. Measured 2026-08-07: an unrehearsed "where are we on the
+widget thing?" swept 8 candidates and read all 8 to surface ONE changed file. The answer was right and
+the route was wasteful. Work the signals cheapest-first and stop as soon as one is decisive.
 
-Scale it to the ask. A day-to-day "where was I" on a thread touched today needs no sweep. Escalate it
-whenever the question is about **state** rather than rationale ("what is left", "where are we", "did we
-ever resolve X", "is that done"), and whenever `last_touched` is older than the newest session file.
+1. **Candidate set (free).** Session `*.jsonl` under `~/.claude/projects/*/` with mtime **on or after**
+   the thread's `last_touched`, minus anything in `threads/.logall-processed.tsv`. Subagent files under
+   `*/subagents/` belong to their parent session.
+   **On-or-after, not after.** `last_touched` is date-granular (`YYYY-MM-DD`), so an exclusive
+   comparison silently drops every same-day session — and "two sessions on one effort in a single day,
+   the second unlogged" is the single most common real gap there is.
+   Zero candidates: say "swept, nothing newer" and stop. Most sweeps end here, for free.
+2. **Artifact correlation (free, and the signal that actually works).** Look for files changed after
+   `last_touched` in the places this effort's work lands: its repo/project paths, and per-session
+   scratchpads under `%TEMP%\claude\<project-key>\<session-id>\scratchpad`. **That path carries the
+   session id in the directory name**, so a changed file there identifies its session outright, with no
+   transcript read at all. Treat a hit as decisive and skip step 3.
+3. **Keyword rank on user turns (cheap) — A signal, not THE signal.** `grep -oE
+   '"role":"user","content":"[^"]{0,600}'` into a scratch file, then grep that for the thread's
+   `topic`/`tags`/title terms. Never rank whole transcripts: the session-start hook injects the EOD
+   recap into every session, so recap topics score high in sessions that never touched them.
+   **Known failure mode, measured:** this returned nothing useful in the one unrehearsed trial, because
+   the session holding the work had user turns about *kit testing* and never said "widget". Any effort
+   where you speak in one register and the artifacts live in another defeats it. If keyword ranking
+   separates nothing, that is an expected outcome, not a reason to read everything.
+4. **Read at most the top 3**, and name the rest as **unswept** in the briefing. An unread candidate is
+   never reported as covered. Reading every candidate is a failure of this step, not thoroughness.
+
+Scale it to the ask. Same-day pickup on a thread you just touched needs no sweep at all. Escalate to
+the full ladder for **state** questions ("what is left", "where are we", "did we ever resolve X") and
+whenever `last_touched` is older than the newest session file — but escalating means working the ladder
+above, not abandoning the budget.
+
+**Say what you are doing if it will not be quick.** Before step 3 or any transcript read, tell the user
+in one line what you are checking and why (e.g. "one session touched this after the thread was last
+logged; reading it before I answer"). Then **surface confirmed findings as they land** rather than
+holding everything for a single final answer — the thread's own state is known immediately and does not
+change based on what the sweep finds. Hold back only what a later step could genuinely reshape: do not
+report "nothing newer" until the sweep is actually done. Silence during a slow check reads as a hang,
+and a state question that takes minutes with no narration is worse than a slightly later answer.
 
 If the sweep finds real unlogged work, **hand it to `/log`** rather than briefing around it: say what
 was found, name the thread, and delegate. `/catchup` does not write the capture itself (see Guardrails);

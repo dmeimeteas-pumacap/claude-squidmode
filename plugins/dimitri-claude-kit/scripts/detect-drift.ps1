@@ -298,7 +298,7 @@ foreach ($area in $goalAreas) {
         if ($snap.num -lt ($live.num - 1)) {
             $age = ''
             if ($th.last_touched -match '^\d{4}-\d{2}-\d{2}$') {
-                try { $days = [int]((Get-Date).Date - ([datetime]$th.last_touched)).TotalDays; $age = "$days d" } catch { $age = $th.last_touched }
+                try { $days = [Math]::Floor(((Get-Date).Date - ([datetime]$th.last_touched)).TotalDays); $age = "$days d" } catch { $age = $th.last_touched }
             }
             $sev = if ($age -and $age -ne '0 d') { 'med' } else { 'low' }
             Add-Finding 'report' 'snapshot_trails_live' 'thread' $thSlug $sev `
@@ -329,7 +329,9 @@ foreach ($slug in $threads.Keys) {
 
     $ageDays = $null
     if ($t.last_touched -match '^\d{4}-\d{2}-\d{2}$') {
-        try { $ageDays = [int]((Get-Date) - [datetime]::ParseExact($t.last_touched, 'yyyy-MM-dd', $null)).TotalDays } catch { $ageDays = $null }
+        # Floor, not [int]: [int] ROUNDS in PowerShell, so a thread touched today at 13:45 reported
+        # "1 d ago" and the $AUTO_STALE_DAYS=7 escalation fired at 6.5 days (0.1.10 finding R5-7).
+        try { $ageDays = [Math]::Floor(((Get-Date) - [datetime]::ParseExact($t.last_touched, 'yyyy-MM-dd', $null)).TotalDays) } catch { $ageDays = $null }
     }
 
     # Both traces present is the normal unconfirmed case. Exactly one present means a partial
