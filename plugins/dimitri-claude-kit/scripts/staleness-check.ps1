@@ -80,9 +80,20 @@ if (-not $firstCall) {
                      'accountability\today.md', 'session-notes\eod-latest.md')) {
         $f = Get-Item (Join-Path $ClaudeDir $p); if ($f) { $watch += $f }
     }
+    # Normalize the root the same way FullName is normalized before slicing. A raw
+    # Substring($ClaudeDir.Length + 1) assumes the two strings match byte for byte: with an 8.3 short
+    # path, a junction, or a trailing separator they do not, which yields a mangled label and - when
+    # $ClaudeDir is the LONGER form - throws ArgumentOutOfRangeException. That throw is terminating,
+    # is not suppressed by SilentlyContinue, and sits outside any try, so the script would die here
+    # and never reach the inbox block below, silently dropping every /reconcile this message for
+    # this session. Same class as the install.ps1 orphan-sweep bug.
+    $rootFull = try { (Get-Item $ClaudeDir).FullName.TrimEnd('\','/') } catch { $ClaudeDir.TrimEnd('\','/') }
     foreach ($f in $watch) {
         if ($f.LastWriteTime -gt $lastSeen) {
-            $rel = $f.FullName.Substring($ClaudeDir.Length + 1)
+            $full = $f.FullName
+            $rel = if ($full.Length -gt $rootFull.Length -and $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
+                $full.Substring($rootFull.Length).TrimStart('\','/')
+            } else { $f.Name }
             $changed += ('{0} ({1:HH:mm})' -f $rel, $f.LastWriteTime)
         }
     }
@@ -99,7 +110,11 @@ try {
     if ($null -ne $dj -and $null -ne $dj.counts) {
         $total = [int]$dj.counts.total
         $ids = (@($dj.findings | ForEach-Object { [string]$_.id }) | Sort-Object) -join '|'
-        if ($total -gt 0 -and $ids -ne [string]$mine.lastDriftIds) {
+        # Not on the session's FIRST prompt: lastDriftIds is null there, so any existing drift looked
+        # like a change and re-announced what the SessionStart banner had just printed seconds
+        # earlier - asserting state "moved outside this conversation" when nothing had moved. The
+        # baseline still records the ids below, so the first REAL change after this still fires.
+        if ($total -gt 0 -and -not $firstCall -and $ids -ne [string]$mine.lastDriftIds) {
             $kinds = ($dj.findings | ForEach-Object { $_.kind } | Select-Object -Unique) -join ', '
             $driftNote = ('{0} drift finding(s) [{1}] as of {2}' -f $total, $kinds, $dj.generated)
         }
@@ -113,8 +128,23 @@ if ($changed.Count -gt 0 -or $driftNote -or $firstCall) { $mine.lastSeen = $nowI
 $mine.touched = $nowIso
 $seen[$sessionId] = $mine
 try {
+    # Re-read and merge immediately before writing, keeping ONLY our own entry from the in-memory
+    # copy. The file is read near the top of this script and rewritten wholesale here, so two
+    # conversations prompting in the same window would let the later write drop the earlier one's
+    # freshly-updated 'touched'. That is not cosmetic: the PROPAGATE lane identifies SELF as the
+    # entry with the newest 'touched' and REFUSES sends addressed to SELF, so a lost update can make
+    # SELF resolve to the wrong session and defeat that guard. Merging keeps other sessions' rows.
+    $merged = @{}
+    if (Test-Path $seenPath) {
+        try {
+            $cur = Get-Content $seenPath -Raw | ConvertFrom-Json
+            foreach ($p in $cur.PSObject.Properties) { $merged[$p.Name] = $p.Value }
+        } catch {}
+    }
+    foreach ($k in $seen.Keys) { if (-not $merged.ContainsKey($k)) { $merged[$k] = $seen[$k] } }
+    $merged[$sessionId] = $mine   # our own row always wins; everyone else's newest read wins
     $out = New-Object psobject
-    foreach ($k in $seen.Keys) { $out | Add-Member -NotePropertyName $k -NotePropertyValue $seen[$k] }
+    foreach ($k in $merged.Keys) { $out | Add-Member -NotePropertyName $k -NotePropertyValue $merged[$k] }
     [System.IO.File]::WriteAllText($seenPath, ($out | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
 } catch {}
 

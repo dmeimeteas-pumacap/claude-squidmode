@@ -92,11 +92,17 @@ function Get-Section([string[]]$lines, [string]$header) {
     # flagged to a human, clean to the machinery, which is the worst failure direction available.
     # So match '##' anywhere on the line. The heading line itself is still excluded from the
     # returned buffer, because callers use the first buffered line as the section's opening prose.
+    # The tolerance is NARROW on purpose. A first attempt matched '##' anywhere on the line, which
+    # made any prose sentence containing an inline '## Next' act as a section boundary: the section
+    # returned zero lines (reintroducing the very blindness this fixes) and produced a false
+    # status_claims_done. Three active threads already carry such sentences. So: headings must start
+    # the line, and the ONLY tolerated prefix is a known AUTO marker, stripped before the test.
     $cap = $false; $buf = @()
     foreach ($l in $lines) {
-        if ($l -match '(?:^|\s)##\s') {
+        $norm = if ($l -match 'AUTO \(AI-selected') { $l -replace '^.*?(?=##\s)', '' } else { $l }
+        if ($norm -match '^\s*##\s') {
             if ($cap) { break }
-            if ($l -match ("##\s+" + [regex]::Escape($header))) { $cap = $true }
+            if ($norm -match ('^\s*##\s+' + [regex]::Escape($header))) { $cap = $true }
             continue
         }
         if ($cap) { $buf += $l }
@@ -106,7 +112,11 @@ function Get-Section([string[]]$lines, [string]$header) {
 
 function Get-HeadingLine([string[]]$lines, [string]$header) {
     # The raw heading line for a section, so a marker living ON the heading is still seen (R6-7).
-    return (@($lines | Where-Object { $_ -match ("##\s+" + [regex]::Escape($header)) }) -join "`n")
+    # Same narrow rule as Get-Section: line-leading '##', or a known AUTO-marker prefix before it.
+    return (@($lines | Where-Object {
+        $n = if ($_ -match 'AUTO \(AI-selected') { $_ -replace '^.*?(?=##\s)', '' } else { $_ }
+        $n -match ('^\s*##\s+' + [regex]::Escape($header))
+    }) -join "`n")
 }
 
 function Get-FirstSentence([string]$text) {
