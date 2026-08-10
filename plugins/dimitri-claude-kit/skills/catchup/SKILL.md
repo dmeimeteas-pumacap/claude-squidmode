@@ -94,11 +94,19 @@ the route was wasteful. Work the signals cheapest-first and stop as soon as one 
    comparison silently drops every same-day session — and "two sessions on one effort in a single day,
    the second unlogged" is the single most common real gap there is.
    Zero candidates: say "swept, nothing newer" and stop. Most sweeps end here, for free.
-2. **Artifact correlation (free, and the signal that actually works).** Look for files changed after
-   `last_touched` in the places this effort's work lands: its repo/project paths, and per-session
-   scratchpads under `%TEMP%\claude\<project-key>\<session-id>\scratchpad`. **That path carries the
-   session id in the directory name**, so a changed file there identifies its session outright, with no
-   transcript read at all. Treat a hit as decisive and skip step 3.
+2. **Artifact correlation (free) — tells you the effort MOVED, never WHO moved it.** Look for files
+   changed after `last_touched` in the places this effort's work lands: its repo/project paths, and
+   per-session scratchpads under `%TEMP%\claude\<project-key>\<session-id>\scratchpad`.
+   **The directory name is the session that FIRST CREATED that file, not the one that last changed
+   it.** Work continues where a file already lives, so every continuation writes into the original
+   owner's scratchpad. Measured 2026-08-07: both artifacts of one effort sat in session `2431d5c9`'s
+   scratchpad and *neither was written by it*; the actual writers' own scratchpads were empty, and
+   `2431d5c9` was already in `.logall-processed.tsv`. Treating the path as attribution would have
+   credited new work to a non-candidate and concluded nothing was new — a silent miss, in exactly the
+   direction this step exists to prevent.
+   So: a changed artifact is strong evidence there IS unlogged work and a good timestamp for it. To
+   resolve WHO, correlate that file's mtime against the candidate sessions' activity windows, and
+   confirm from the transcript. **Never skip the read on the strength of the path alone.**
 3. **Keyword rank on user turns (cheap) — A signal, not THE signal.** `grep -oE
    '"role":"user","content":"[^"]{0,600}'` into a scratch file, then grep that for the thread's
    `topic`/`tags`/title terms. Never rank whole transcripts: the session-start hook injects the EOD

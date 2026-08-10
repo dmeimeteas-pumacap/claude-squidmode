@@ -188,11 +188,17 @@ Using live conversation + file context, additionally look for the judgment-only 
      the most common real gap there is. Sessions older than every thread's `last_touched` but absent
      from `.logall-processed.tsv` are still candidates — a thread date never bounds work that predates
      the thread.
-  3. **Correlate artifacts before reading anything (free, and the signal that actually works).** Files
+  3. **Correlate artifacts first (free) — it tells you the effort MOVED, never WHO moved it.** Files
      changed after `last_touched` under the effort's repo/project paths, and under per-session
-     scratchpads at `%TEMP%\claude\<project-key>\<session-id>\scratchpad` — **that path carries the
-     session id in its directory name**, so a changed file there identifies its session with no
-     transcript read. A hit here is decisive; skip step 4.
+     scratchpads at `%TEMP%\claude\<project-key>\<session-id>\scratchpad`.
+     **That directory names the session that FIRST CREATED the file, not the one that last wrote it.**
+     Work continues where a file already lives, so continuations land in the original owner's
+     scratchpad. Measured 2026-08-07: both artifacts of one effort sat in `2431d5c9`'s scratchpad,
+     neither written by it, the real writers' scratchpads were empty, and `2431d5c9` was already in
+     `.logall-processed.tsv` — so path-as-attribution would have credited the work to a non-candidate
+     and reported nothing new. That is a silent miss in the direction this whole class exists to stop.
+     Use it as evidence unlogged work EXISTS and for its timestamp; resolve WHO by correlating the
+     file's mtime against candidate sessions' activity windows, confirmed from the transcript.
   4. Only if step 3 is inconclusive, keyword-rank — **on the USER's turns only**, e.g. `grep -oE
      '"role":"user","content":"[^"]{0,600}'` into a scratch file first, then grep that. Ranking whole
      transcripts does not work: the session-start hook injects the EOD recap into EVERY session, so

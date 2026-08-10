@@ -217,8 +217,10 @@ function Install-ClaudeTemplate { param([string] $TemplatePath, [string] $Target
       $tmplSections = & $hdr $TemplatePath
       $userSections = & $hdr $TargetPath
       $missing = @($tmplSections | Where-Object { $userSections -notcontains $_ })
+      # Always emit the key, even when empty (0.1.10 finding R6-5): omitting it made "checked, found
+      # nothing missing" indistinguishable from "written by an installer that never had this check".
+      $script:Receipt.claudeMdMissingSections = $missing
       if ($missing.Count) {
-        $script:Receipt.claudeMdMissingSections = $missing
         $shown = if ($missing.Count -le 4) { $missing -join '; ' } else { (($missing | Select-Object -First 4) -join '; ') + "; +$($missing.Count - 4) more" }
         $script:Report.Add("[REVIEW] Your CLAUDE.md is missing $($missing.Count) section(s) the kit template now carries: $shown. These are behavioural rules the kit's skills assume -- copy the ones you want from CLAUDE.kit-template.md.")
       }
@@ -443,7 +445,11 @@ function Install-ExternalPlugins {
     $ans = $null
     try { $ans = Read-Host "Install optional enhancement plugins ($(($deps.Name) -join ', '))? (Y/n)" }
     catch {
-      $script:Report.Add("[SKIPPED] optional-plugin prompt could not be shown ($($_.Exception.Message.Split([char]10)[0])). Continuing; re-run with -NonInteractive to silence this.")
+      # Name the flag unambiguously: the host flag (powershell.exe -NonInteractive) is what CAUSES
+      # this branch, so advising "-NonInteractive" reads as already-done to anyone who used it
+      # (0.1.10 finding R6-4). The installer's OWN -NonInteractive parameter is the one that silences
+      # it, and -SkipExternalPlugins avoids the block entirely.
+      $script:Report.Add("[SKIPPED] optional-plugin prompt could not be shown ($($_.Exception.Message.Split([char]10)[0])). Continuing. To silence this, pass -NonInteractive to install.ps1 itself (not just to powershell.exe), or -SkipExternalPlugins to leave your plugin set alone.")
       return
     }
     if ($ans -match '^(n|no)$') { $script:Report.Add("[SKIPPED] external enhancement plugins (declined)."); return }

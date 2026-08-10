@@ -85,12 +85,28 @@ function Get-FmValue([string[]]$lines, [int]$fmEnd, [string]$key) {
 
 function Get-Section([string[]]$lines, [string]$header) {
     # Return the lines under a "## <header>" section (until the next "## ").
+    # TOLERANT heading match (0.1.10 finding R6-7): text prepended onto the heading LINE - e.g. an
+    # "AUTO (AI-selected...)" marker written as a prefix rather than as the section's first line -
+    # stops the line from STARTING with '##', which made the whole section invisible. The detector
+    # then reported counts.total == 0 on a file that visibly carried both auto-capture traces:
+    # flagged to a human, clean to the machinery, which is the worst failure direction available.
+    # So match '##' anywhere on the line. The heading line itself is still excluded from the
+    # returned buffer, because callers use the first buffered line as the section's opening prose.
     $cap = $false; $buf = @()
     foreach ($l in $lines) {
-        if ($l -match '^##\s') { if ($cap) { break }; if ($l -match ("^##\s+" + [regex]::Escape($header))) { $cap = $true }; continue }
+        if ($l -match '(?:^|\s)##\s') {
+            if ($cap) { break }
+            if ($l -match ("##\s+" + [regex]::Escape($header))) { $cap = $true }
+            continue
+        }
         if ($cap) { $buf += $l }
     }
     return $buf
+}
+
+function Get-HeadingLine([string[]]$lines, [string]$header) {
+    # The raw heading line for a section, so a marker living ON the heading is still seen (R6-7).
+    return (@($lines | Where-Object { $_ -match ("##\s+" + [regex]::Escape($header)) }) -join "`n")
 }
 
 function Get-FirstSentence([string]$text) {
@@ -166,8 +182,13 @@ foreach ($loc in @(@{dir = $ThreadsActive; tag = 'active' }, @{dir = $ThreadsDon
         # Scan the WHOLE section, not just its first line: a later capture prepends a fresh
         # paragraph and demotes the prior one under 'Prior:', which pushes an AUTO marker out of
         # the first line while leaving it very much present.
-        $autoMarked   = (($wloSec -join "`n") -match 'AUTO \(AI-selected')
-        $confirmBoxes = @($openNext | Where-Object { $_ -match '(?i)confirm.{0,40}auto-capture' }).Count
+        # Include the heading LINE in the marker scan (R6-7): a marker written as a prefix on
+        # '## Where I left off' rather than as the section's first line is still a marker.
+        $autoMarked   = ((($wloSec -join "`n") + "`n" + (Get-HeadingLine $lines 'Where I left off')) -match 'AUTO \(AI-selected')
+        # Tolerate a confirm item whose '-' bullet is missing (same R6-7 fixture): a line that opens
+        # with '[ ]' is an open checkbox by any reasonable reading. Scoped to THIS scan only -
+        # openNextCount above stays strict so other findings' counts are not inflated.
+        $confirmBoxes = @($nextSec | Where-Object { $_ -match '^\s*-?\s*\[ \]' -and $_ -match '(?i)confirm.{0,40}auto-capture' }).Count
         $threads[$f.BaseName] = [pscustomobject]@{
             status = $status; last_touched = $lt; wlo = ([string]$wlo)
             wloFirst = (Get-FirstSentence ([string]$wlo)); openNextCount = $openNext.Count
