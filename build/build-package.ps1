@@ -18,7 +18,8 @@ param(
   [string] $ClaudeDir = (Join-Path $env:USERPROFILE '.claude'),
   [string] $RepoRoot  = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)),
   [string] $Version,  # defaults to the VERSION file (the single source of truth); -Version overrides
-  [switch] $AllowIncompleteDocs  # downgrade Assert-GuideCoverage failures to [REVIEW] lines
+  [switch] $AllowIncompleteDocs, # downgrade Assert-GuideCoverage failures to [REVIEW] lines
+  [switch] $AcceptGuideDrift     # re-stamp guide-stamps.json after updating guide entries (see Assert-GuideCurrency)
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Version) {
@@ -371,6 +372,66 @@ function Assert-ScriptDeps {
   $Report.Add("Assert-ScriptDeps: clean")
 }
 
+function Assert-GuideCurrency {
+  # Assert-GuideCoverage proves an entry EXISTS with the right field classes. It cannot tell whether
+  # that entry still DESCRIBES the command. v0.1.10 shipped the whole PROPAGATE lane with the guide
+  # still calling /reconcile a two-lane command -- the coverage gate passed the entire time, because
+  # the entry existed and carried every required class. This gate closes that blind spot.
+  #
+  # Mechanism: a command's SKILL.md `description` frontmatter IS its user-facing summary, so a change
+  # there is the best available proxy for "what this command does has changed". We stamp a hash of it
+  # in build/guide-stamps.json. A hash that no longer matches means the guide entry needs a human
+  # re-read; the build HARD-FAILS until someone either updates the entry or accepts the drift.
+  #
+  # Workflow when this fires: update the entry per build/guide-authoring.md, then re-run with
+  # -AcceptGuideDrift to re-stamp. Accepting without reading the entry defeats the whole gate.
+  $stampPath = Join-Path $RepoRoot 'build/guide-stamps.json'
+  $old = @{}
+  if (Test-Path $stampPath) {
+    try {
+      $j = Get-Content $stampPath -Raw | ConvertFrom-Json
+      foreach ($p in $j.PSObject.Properties) { $old[$p.Name] = [string]$p.Value }
+    } catch { }
+  }
+
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $now = [ordered]@{}
+  foreach ($s in ($ShipSkills | Sort-Object)) {
+    if ($ExcludeSkills -contains $s) { continue }
+    $md = Stage-Path "$PluginRel/skills/$s/SKILL.md"
+    if (-not (Test-Path $md)) { continue }
+    $m = [regex]::Match([System.IO.File]::ReadAllText($md), '(?ms)^description:\s*"?(.*?)"?\s*$')
+    $desc = if ($m.Success) { ($m.Groups[1].Value -replace '\s+', ' ').Trim() } else { '' }
+    $now[$s] = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($desc))).Replace('-', '').Substring(0, 16)
+  }
+  $sha.Dispose()
+
+  $drifted = @(); $fresh = @()
+  foreach ($k in $now.Keys) {
+    if (-not $old.ContainsKey($k)) { $fresh += $k }
+    elseif ($old[$k] -ne $now[$k]) { $drifted += $k }
+  }
+  $gone = @($old.Keys | Where-Object { -not $now.Contains($_) })
+
+  if ($AcceptGuideDrift -or -not (Test-Path $stampPath)) {
+    Write-NoBom $stampPath (($now | ConvertTo-Json -Depth 3))
+    $what = if (Test-Path $stampPath) { "re-stamped" } else { "seeded" }
+    $Report.Add("Assert-GuideCurrency: $what $($now.Count) command(s)$(if ($drifted.Count) { " (accepted drift: $($drifted -join ', '))" })")
+    return
+  }
+
+  if ($drifted.Count -or $fresh.Count) {
+    Write-Host "`n!! Assert-GuideCurrency FAILED -- the guide may no longer describe these commands:" -ForegroundColor Red
+    foreach ($d in $drifted) { Write-Host "   - /$d  (its SKILL.md description changed since the guide was last stamped)" -ForegroundColor Red }
+    foreach ($f in $fresh)   { Write-Host "   - /$f  (NEW command, never stamped -- it needs a guide entry written)" -ForegroundColor Red }
+    Write-Host "   Fix: re-read each entry against the skill (see build/guide-authoring.md), update what is stale," -ForegroundColor Yellow
+    Write-Host "        then re-run with -AcceptGuideDrift to re-stamp." -ForegroundColor Yellow
+    throw "Assert-GuideCurrency: $($drifted.Count + $fresh.Count) command(s) need a guide re-read."
+  }
+  if ($gone.Count) { $Report.Add("[REVIEW] Assert-GuideCurrency: stamped but no longer shipped: $($gone -join ', ') (prune build/guide-stamps.json)") }
+  $Report.Add("Assert-GuideCurrency: clean ($($now.Count) commands stamped)")
+}
+
 function Assert-NoPersonalData {
   $hits = New-Object System.Collections.Generic.List[string]
   Get-ChildItem $Stage -Recurse -File | ForEach-Object {
@@ -423,6 +484,7 @@ function Invoke-Build {
   Sync-Docs
   Sync-Guide
   Assert-GuideCoverage      # <- HARD GATE: dead refs / missing entries (see -AllowIncompleteDocs)
+  Assert-GuideCurrency      # <- HARD GATE: entry exists but no longer DESCRIBES the command (see -AcceptGuideDrift)
   Assert-ScriptDeps         # <- HARD GATE: shipped script includes an unshipped sibling (B1 class)
   Assert-NoPersonalData     # <- HARD GATE: throws before Promote on any leak
   Promote-Stage
