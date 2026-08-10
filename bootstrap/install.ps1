@@ -38,7 +38,7 @@ $script:Report  = New-Object System.Collections.Generic.List[string]
 $script:Receipt = [ordered]@{
   kitVersion = $KitVersion; installedAt = $Stamp; claudeDir = $ClaudeDir
   backupDir = $null; filesOverwritten = @(); settingsKeysAdded = @()
-  settingsConflictsKept = @(); arraysAppended = @(); scaffoldDirsCreated = @()
+  settingsConflictsKept = @(); arraysAppended = @(); scaffoldDirsCreated = @(); usageGuide = $null
   tasksRegistered = @(); pluginsInstalled = @(); statusLine = 'untouched'; claudeMd = 'untouched'
   themeCommand = 'untouched'
 }
@@ -141,8 +141,28 @@ function Merge-SettingsJson { param([string] $TemplatePath, [string] $TargetPath
           $cur.$key | Add-Member -NotePropertyName $sub.Name -NotePropertyValue $sub.Value; $changed = $true
           $script:Receipt.settingsKeysAdded += "$key.$($sub.Name)"
         } elseif (-not (Json-Eq $cur.$key.$($sub.Name) $sub.Value)) {
-          $script:Receipt.settingsConflictsKept += "$key.$($sub.Name)"
-          $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)' = your value (kit wanted '$($sub.Value)'; re-run with -Interactive to choose).")
+          # 0.1.9 (B2): recurse ONE level further when both sides are objects. INSTALL.md has the
+          # recipient run `claude plugin marketplace add` BEFORE this installer, which pre-creates
+          # extraKnownMarketplaces.<name> WITHOUT autoUpdate -- so the flat keep-theirs branch here
+          # dropped autoUpdate for every recipient, and nobody ever received automatic updates.
+          $curEntry = $cur.$key.$($sub.Name)
+          if ($curEntry -is [pscustomobject] -and $sub.Value -is [pscustomobject]) {
+            $nestedKept = @()
+            foreach ($n in $sub.Value.PSObject.Properties) {
+              if ($curEntry.PSObject.Properties.Name -notcontains $n.Name) {
+                $curEntry | Add-Member -NotePropertyName $n.Name -NotePropertyValue $n.Value; $changed = $true
+                $script:Receipt.settingsKeysAdded += "$key.$($sub.Name).$($n.Name)"
+              } elseif (-not (Json-Eq $curEntry.$($n.Name) $n.Value)) { $nestedKept += $n.Name }
+            }
+            if ($nestedKept.Count) {
+              $script:Receipt.settingsConflictsKept += @($nestedKept | ForEach-Object { "$key.$($sub.Name).$_" })
+              $consequence = if ($nestedKept -contains 'autoUpdate') { " CONSEQUENCE: you will NOT receive automatic kit updates until autoUpdate is true." } else { "" }
+              $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)': your value(s) kept for $($nestedKept -join ', ') (kit differs; re-run with -Interactive to choose).$consequence")
+            }
+          } else {
+            $script:Receipt.settingsConflictsKept += "$key.$($sub.Name)"
+            $script:Report.Add("[KEPT] settings.json '$key.$($sub.Name)' = your value (kit wanted '$($sub.Value)'; re-run with -Interactive to choose).")
+          }
         }
       }
       continue
@@ -186,6 +206,25 @@ function Install-ClaudeTemplate { param([string] $TemplatePath, [string] $Target
     Copy-Item $TemplatePath $alt -Force
     $script:Receipt.claudeMd = 'left intact; template dropped as CLAUDE.kit-template.md'
     $script:Report.Add("[SKIPPED] CLAUDE.md left intact. Kit template dropped at CLAUDE.kit-template.md -- merge the behavioral sections by hand if you want them.")
+    # R5-11 (0.1.10): say WHICH sections they are missing, by name. Still no merge -- never touching a
+    # user's CLAUDE.md is the invariant -- but silence here meant an upgrading user whose CLAUDE.md is
+    # itself an older copy of this template never learned a new section existed. Measured in the
+    # sandbox: a behavioural rule added in 0.1.9 (offer the guide + /kit) never reached that profile,
+    # and the vetting round failed the check that rule was written to satisfy.
+    try {
+      $hdr = { param($P) @(Select-String -Path $P -Pattern '^##\s+(.+?)\s*$' |
+                           ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }) }
+      $tmplSections = & $hdr $TemplatePath
+      $userSections = & $hdr $TargetPath
+      $missing = @($tmplSections | Where-Object { $userSections -notcontains $_ })
+      # Always emit the key, even when empty (0.1.10 finding R6-5): omitting it made "checked, found
+      # nothing missing" indistinguishable from "written by an installer that never had this check".
+      $script:Receipt.claudeMdMissingSections = $missing
+      if ($missing.Count) {
+        $shown = if ($missing.Count -le 4) { $missing -join '; ' } else { (($missing | Select-Object -First 4) -join '; ') + "; +$($missing.Count - 4) more" }
+        $script:Report.Add("[REVIEW] Your CLAUDE.md is missing $($missing.Count) section(s) the kit template now carries: $shown. These are behavioural rules the kit's skills assume -- copy the ones you want from CLAUDE.kit-template.md.")
+      }
+    } catch {}
   } else {
     Copy-Item $TemplatePath $TargetPath -Force
     $script:Receipt.claudeMd = 'installed (was absent)'
@@ -198,20 +237,34 @@ function Install-ClaudeTemplate { param([string] $TemplatePath, [string] $Target
 # ---------------------------------------------------------------------------
 function Install-StatusLine { param([string] $SettingsTarget)
   $slPath = Join-Path $ClaudeDir 'statusline.ps1'
+  $slLib  = Join-Path $ClaudeDir 'statusline-lib.ps1'
+  $libSrc = Join-Path $PkgRoot 'bootstrap/statusline-lib.ps1'
   $settings = if (Test-Path $SettingsTarget) { Get-Content $SettingsTarget -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
   $hasFile = Test-Path $slPath
   $hasKey  = $settings.PSObject.Properties.Name -contains 'statusLine'
 
   if (($hasFile -or $hasKey) -and -not $IncludeStatusLine) {
+    # 0.1.9 (B1): a statusline installed by kit 0.1.7/0.1.8 dot-sources statusline-lib.ps1, which
+    # those versions never shipped. Repair that one case here: add-only, never touches an existing
+    # file, and skips statuslines that don't reference the lib (i.e. the user's own).
+    if ($hasFile -and (Test-Path $libSrc) -and -not (Test-Path $slLib) -and
+        ((Get-Content $slPath -Raw) -match 'statusline-lib\.ps1')) {
+      Copy-Item $libSrc $slLib -Force
+      $script:Receipt.statusLine = 'skipped (existing detected); statusline-lib.ps1 added (required by it, was missing)'
+      $script:Report.Add("[REPAIRED] statusline-lib.ps1 installed -- your statusline.ps1 requires it and it was missing (kit 0.1.7/0.1.8 defect).")
+      return
+    }
     $script:Receipt.statusLine = 'skipped (existing detected)'
     $script:Report.Add("[SKIPPED] statusline left as-is (existing detected). Re-run with -IncludeStatusLine to adopt the kit's (backs yours up first).")
     return
   }
   if (($hasFile -or $hasKey) -and $IncludeStatusLine) {
     if ($hasFile) { Backup-One $slPath }
+    if (Test-Path $slLib) { Backup-One $slLib }
     if ($hasKey)  { Backup-One $SettingsTarget }
   }
   Copy-Item (Join-Path $PkgRoot 'bootstrap/statusline.ps1') $slPath -Force
+  if (Test-Path $libSrc) { Copy-Item $libSrc $slLib -Force }   # B1: the bar dot-sources this lib
   $themesDir = Join-Path $ClaudeDir 'themes'; New-Item -ItemType Directory -Path $themesDir -Force | Out-Null
   Copy-Item (Join-Path $PkgRoot 'bootstrap/themes/cc-active.json') (Join-Path $themesDir 'cc-active.json') -Force
   # wire the settings key (atomic with the file)
@@ -243,6 +296,99 @@ function Install-ThemeCommand {
   Copy-Item $src $dst -Force
   $script:Receipt.themeCommand = 'installed'
   $script:Report.Add("[INSTALLED] commands/theme.md -- bare /theme now opens the custom palette picker (restart to load).")
+}
+
+# ---------------------------------------------------------------------------
+# Usage guide -- copy to a STABLE human-openable path.
+#
+# The guide also ships inside the plugin, which is where /kit reads it from. That plugin copy is NOT
+# usable by a person: installed plugins land under
+# ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/, a leaf that changes every release, so it
+# cannot go in a doc or a bookmark. So we copy it to ~/.claude/guide/ and every human-facing doc cites
+# that path only. This is a copy of a shipped artifact, never a second authored source -- it is
+# overwritten wholesale on re-install, and there is nothing in it a user would edit.
+# ---------------------------------------------------------------------------
+# N1 (0.1.9.1): this refresh used to Remove-Item -Recurse the whole guide dir on every run. Under the
+# script-wide $ErrorActionPreference='Stop' a locked dir (a terminal parked in guide/, a page open in
+# an editor -- the kit TELLS people to open these) threw and aborted the entire installer AFTER the
+# statusline + settings work, so the receipt was never written and the run failed silently.
+# Fixed three ways: (1) no-op when content already matches, so the common re-run touches nothing;
+# (2) copy OVER the top + sweep orphans instead of delete-then-recreate, so holding the directory
+# open no longer blocks anything; (3) the whole thing is non-fatal -- a failure reports and lets the
+# install finish, receipt included.
+function Install-UsageGuide {
+  $src = Join-Path $PkgRoot 'plugins/dimitri-claude-kit/guide'
+  if (-not (Test-Path $src)) { $script:Report.Add("[SKIPPED] usage guide not present in the package."); return }
+  $dst = Join-Path $ClaudeDir 'guide'
+  $fresh = -not (Test-Path $dst)
+
+  # Relative-path keys MUST come from a root normalized the same way Get-ChildItem normalizes
+  # FullName, or the Substring offset is wrong and every key mismatches. Caught in test: -ClaudeDir
+  # given as an 8.3 short path ('...\DMEIME~1\...') while FullName expands to the long name, which
+  # made the orphan sweep below delete the files it had just copied. (Get-Item).FullName expands
+  # short names and settles separators/trailing slashes for both sides.
+  $rel = { param($Root, $F) $F.FullName.Substring($Root.Length).TrimStart('\','/') }
+  $srcRoot = (Get-Item $src).FullName.TrimEnd('\','/')
+
+  # Content compare (relative path + hash). Identical -> nothing to do; never open the write window.
+  # MUST be non-fatal: Get-FileHash on a locked page throws under the script-wide -Stop preference,
+  # which would abort the installer before the receipt is written -- the very N1 failure this function
+  # exists to fix, just moved earlier. Caught in test with an exclusive handle on index.html. On any
+  # read failure, fall through as "changed" and let the guarded copy below report it.
+  if (-not $fresh) {
+    $same = $false
+    try {
+      # -ErrorAction SilentlyContinue, not the ambient -Stop: a locked page otherwise writes a raw
+      # PowerShell error record to stderr even though the catch below handles it, so the user saw a
+      # friendly [SKIPPED] line AND a red stack trace for the same event (0.1.9.1 finding R5-5).
+      # A null hash means unreadable, which counts as "changed" and falls through to the guarded copy.
+      $dstRootCmp = (Get-Item $dst).FullName.TrimEnd('\','/')
+      $srcMap = @{}; $dstMap = @{}
+      foreach ($f in @(Get-ChildItem $src -Recurse -File)) { $srcMap[(& $rel $srcRoot $f)] = (Get-FileHash $f.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash }
+      foreach ($f in @(Get-ChildItem $dst -Recurse -File)) { $dstMap[(& $rel $dstRootCmp $f)] = (Get-FileHash $f.FullName -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash }
+      $same = $srcMap.Count -eq $dstMap.Count
+      if ($same) {
+        foreach ($k in $srcMap.Keys) {
+          if (-not $srcMap[$k] -or -not $dstMap[$k] -or ($dstMap[$k] -ne $srcMap[$k])) { $same = $false; break }
+        }
+      }
+    } catch { $same = $false }
+    if ($same) {
+      $script:Receipt.usageGuide = 'guide (unchanged)'
+      $script:Report.Add("[UNCHANGED] guide/ -- already current ($($srcMap.Count) files). Open $dst\index.html in a browser; no Claude session needed.")
+      return
+    }
+  }
+
+  try {
+    New-Item -ItemType Directory -Path $dst -Force | Out-Null
+    Copy-Item (Join-Path $src '*') $dst -Recurse -Force   # overwrite in place; no dir delete
+    # Sweep files the package no longer ships (a renamed/removed page would otherwise linger).
+    $keep = @{}
+    foreach ($f in @(Get-ChildItem $src -Recurse -File)) { $keep[(& $rel $srcRoot $f)] = $true }
+    # Safety: an empty keep-set can only mean the key derivation broke, never "the package ships no
+    # guide files" (Test-Path above already proved otherwise). Deleting on that basis would wipe the
+    # guide, so skip the sweep instead -- a stale leftover is strictly cheaper than a wrong delete.
+    if ($keep.Count -gt 0) {
+      $dstRoot = (Get-Item $dst).FullName.TrimEnd('\','/')
+      foreach ($f in @(Get-ChildItem $dst -Recurse -File)) {
+        $r = & $rel $dstRoot $f
+        if (-not $keep.ContainsKey($r)) {
+          try { Remove-Item $f.FullName -Force } catch { $script:Report.Add("[WARN] guide/: could not remove stale '$r' ($($_.Exception.Message)).") }
+        }
+      }
+    } else {
+      $script:Report.Add("[WARN] guide/: orphan sweep skipped (could not derive relative paths).")
+    }
+    $n = @(Get-ChildItem $dst -Filter '*.html' -File).Count
+    $script:Receipt.usageGuide = 'guide'
+    $verb = if ($fresh) { 'INSTALLED' } else { 'REFRESHED' }
+    $script:Report.Add("[$verb] guide/ -- $n pages. Open $dst\index.html in a browser; no Claude session needed.")
+  } catch {
+    # NEVER fatal: the guide is a convenience copy, and aborting here loses the install receipt.
+    $script:Receipt.usageGuide = "failed: $($_.Exception.Message)"
+    $script:Report.Add("[SKIPPED] guide/ could not be written -- something is holding it open (a terminal parked in guide\, or a page open in an editor). Close it and re-run the installer; everything else installed normally. ($($_.Exception.Message))")
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -285,8 +431,27 @@ function Install-ExternalPlugins {
     $script:Report.Add("[MANUAL] Optional enhancements -- install yourself: $cmds")
     return
   }
-  if (-not $NonInteractive) {
-    $ans = Read-Host "Install optional enhancement plugins ($(($deps.Name) -join ', '))? (Y/n)"
+  # A bare Read-Host in a non-interactive host (CI, a scripted install, `powershell -NonInteractive`)
+  # THROWS under the script-wide -Stop preference, aborting the installer after the statusline and
+  # settings work with no summary and a stale receipt -- the identical failure shape N1 fixed in the
+  # guide block (0.1.9.1 finding R5-4).
+  # MEASURED: [Environment]::UserInteractive returns TRUE under `powershell -NonInteractive`, so the
+  # cheap host check does NOT catch that case -- the try/catch below is the load-bearing fix, and the
+  # UserInteractive branch only helps in a genuinely non-interactive context (a service, no window
+  # station). Keep both; do not "simplify" by deleting the catch.
+  if (-not $NonInteractive -and -not [Environment]::UserInteractive) {
+    $script:Report.Add("[SKIPPED] optional-plugin prompt (non-interactive host detected; installing deps merge-safely as if -NonInteractive).")
+  } elseif (-not $NonInteractive) {
+    $ans = $null
+    try { $ans = Read-Host "Install optional enhancement plugins ($(($deps.Name) -join ', '))? (Y/n)" }
+    catch {
+      # Name the flag unambiguously: the host flag (powershell.exe -NonInteractive) is what CAUSES
+      # this branch, so advising "-NonInteractive" reads as already-done to anyone who used it
+      # (0.1.10 finding R6-4). The installer's OWN -NonInteractive parameter is the one that silences
+      # it, and -SkipExternalPlugins avoids the block entirely.
+      $script:Report.Add("[SKIPPED] optional-plugin prompt could not be shown ($($_.Exception.Message.Split([char]10)[0])). Continuing. To silence this, pass -NonInteractive to install.ps1 itself (not just to powershell.exe), or -SkipExternalPlugins to leave your plugin set alone.")
+      return
+    }
     if ($ans -match '^(n|no)$') { $script:Report.Add("[SKIPPED] external enhancement plugins (declined)."); return }
   }
   foreach ($d in $deps) {
@@ -342,6 +507,7 @@ function Invoke-Bootstrap {
   Merge-SettingsJson -TemplatePath $tmplSettings -TargetPath $settingsTarget
   Install-ClaudeTemplate -TemplatePath $tmplClaude -TargetPath $claudeTarget
   Install-ThemeCommand
+  Install-UsageGuide
   Initialize-ContinuityScaffold
   Install-ExternalPlugins
   Install-EodScheduleOptional

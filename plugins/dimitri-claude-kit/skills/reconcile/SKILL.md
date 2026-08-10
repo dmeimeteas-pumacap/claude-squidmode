@@ -1,0 +1,411 @@
+---
+name: reconcile
+description: "Continuity/cleanliness reconciler with three lanes: make my information accurate to current state across the board. PROPAGATE lane (`/reconcile this`): send a SHORT TEXT MESSAGE to another one of your conversations when something done here changes what that chat should believe, but does not merit a thread Log entry — infers the recipient chat and confirms it, delivered once on that conversation's next prompt, never stored. Use on '/reconcile this', 'propagate this', 'tell the other chat', 'pass this along', 'send this to the other conversation', 'let my other chat know'. SYNC lane: detects drift across the ~/.claude stores (goals.md areas, threads, INDEX, links.tsv) via the shared detect-drift.ps1 engine — plus model-side judgment checks incl. tracker-vs-goals lag via the day sidecar — and resolves it in-session by delegating to /log and /goals modes; deterministic INDEX fixes apply directly. STATUS-UPDATE lane (absorbed from the retired /update-statuses, 2026-07-31): an interactive digest-driven walk-through truing records to reality — tick done thread/goal items, route uncaptured work, recap. Bare /reconcile asks which lane; `/reconcile sync` or `/reconcile status` skips the question. Use when the user says '/reconcile', 'reconcile my state', 'clean up drift', 'fix the stale state', 'sync threads and goals', 'update my statuses', 'check off what's done', 'true up my records', 'run through my threads', or after the session-start banner / mid-session staleness line reports drift. Companion to the passive freshness layer (scheduled headless detector + prompt-time staleness hook) — that layer detects and surfaces; THIS skill writes. NOT /deepclean (filesystem janitor), /log (single-effort capture), /eod (day synthesis)."
+user-invocable: true
+disable-model-invocation: false
+argument-hint: "[sync [<finding-kind>|<slug>] | status | this [to <slug>]]"
+---
+
+# Reconcile Skill (two lanes: sync + status-update)
+
+Keeps the `~/.claude` continuity stores honest. The deterministic detector
+(`~/.claude/janitor/detect-drift.ps1`) finds drift and writes `janitor/drift-latest.json`; this
+skill reads that report, layers judgment, and **applies fixes by delegating to the existing `/log`
+and `/goals` lifecycle modes** — it never hand-edits append-only thread/goal sections.
+
+Store model (2026-07-31): goals live in the single-file area store `~/.claude/goals/goals.md`
+(areas keyed by `id:`; tasks with `{timeliness}` tags + `↻ N` rollovers — format in
+`skills/goals/reference.md`). Threads are MEMORY, decoupled; the day's plan is the tracker store +
+its `accountability/today-goalmap.tsv` sidecar (tracker item ↔ area task).
+
+## Step 0 — Resolve the lane
+
+- `/reconcile sync [<kind>|<slug>]` → SYNC lane. `/reconcile status` → STATUS-UPDATE lane.
+  **`/reconcile this [to <slug>]` → PROPAGATE lane.**
+- Bare `/reconcile` (or ambiguous phrasing) → ask once (AskUserQuestion, single-select):
+  **"Sync check (drift engine → fix findings), status update (walk through what you actually did →
+  true up the records), or send a message to another chat?"** Options: `Sync check` / `Status update` /
+  `Message another chat` / `Both (sync first)`.
+- Phrasing that clearly names a lane skips the question: "clean up drift" / "fix stale state" /
+  "sync threads and goals" → sync; "update my statuses" / "check off what's done" / "true up my
+  records" / end-of-day phrasing → status; "tell the other chat" / "propagate this" / "pass this
+  along" / "let my other chat know" → propagate.
+
+All lanes are live-session only where popups are involved; never run the interactive parts
+headless.
+
+---
+
+# PROPAGATE lane (`/reconcile this`)
+
+Send a **short text message to another one of your conversations**. Use when something done here
+changes what a different chat should believe, but does not merit a thread Log entry.
+
+Mental model: a text message between two chat clients. **Not** a mailbox, not an inbox, not a record.
+Plan of record: `~/.claude/plans/2026-08-reconcile-propagate-lane.md`.
+
+## Guard FIRST: is this actually a message, or a log entry?
+
+Before anything else. If the update names a **decision with a rationale**, or changes **state that
+outlives today**, say so in one line and offer `/log` instead. Nothing here is recorded, so a
+misrouted log entry is unrecoverable rather than merely misfiled. Send only genuinely transient
+status.
+
+## Step 1 — Identify SELF, and exclude it
+
+The sending conversation is, by construction, both the most-recently-modified transcript and the top
+scorer on the exact terms being propagated. Without explicit self-exclusion this lane will nominate
+the chat the user is sitting in, and confirmation cannot catch that (a candidate labelled "active 1
+minute ago, about the thing we just did" is indistinguishable from the right answer).
+
+`janitor/staleness-seen.json` is keyed by session id and its `touched` field is updated on **every**
+prompt submit, unconditionally. So the entry with the newest `touched` is this conversation. Read it,
+treat it as SELF, and:
+
+- exclude SELF from the candidate set, and
+- **REFUSE** a send addressed to SELF (never "confirm" it), and
+- use it as `from_session`.
+
+If another session submits a prompt in the window, `max(touched)` can flip. It fails visibly (the
+confirm step shows a session the user does not expect), and self-exclusion is by id, not heuristic.
+
+## Step 2 — Pick the recipient
+
+Explicit `/reconcile this to <slug>` skips inference. Otherwise:
+
+1. Enumerate `~/.claude/projects/*/*.jsonl` by mtime; drop SELF.
+2. Rank on the **user's turns only** (`grep -oE '"role":"user","content":"[^"]{0,600}'` into a scratch
+   file, then grep that). Whole-file ranking does not work: the session-start hook injects the EOD
+   recap into every session, so recap topics score high everywhere.
+3. **One `AskUserQuestion` pass** listing the top candidates plus a `— none of these —` sentinel, each
+   labelled by **topic + last-active time, never by UUID** (UUIDs are meaningless to the user).
+4. Sentinel: widen the list once, then abort and say plainly that nothing was sent.
+
+**Confirmation is mandatory when inferred.** A wrong recipient is not noise: it silently tells the
+wrong conversation something true about different work.
+
+## Step 3 — Write the message
+
+`~/.claude/.inbox/<yyyyMMdd-HHmmss>-<from-short>.json` (create `.inbox/` if absent):
+
+```json
+{ "to_session": "<recipient session id>", "from_session": "<self>",
+  "created": "<ISO>", "text": "One to three sentences." }
+```
+
+Body = what changed, and what the recipient should now believe or stop assuming. One to three
+sentences. This is a text message, not a summary.
+
+## Step 4 — Report honestly, and record the send
+
+**Never say "sent" or "delivered"** — there is no delivery signal, ever. Required shape:
+
+> Queued for the AI-tab chat. It lands on that conversation's next prompt, and expires in 4h if that
+> chat is not prompted.
+
+Then append ONE line to `janitor/sweep-log.md`:
+
+```
+- <ISO timestamp>  to=<topic-label> src=propagate
+```
+
+**The message text is never written to that log** — only that a send happened, when, and to which
+chat. That keeps messages ephemeral while making the guard above falsifiable: without it, "am I using
+this lane to dodge `/log`" is unanswerable, the exact blind spot fixed for `unswept_live_session`.
+`to=` is the human topic label, not a UUID. Anything parsing that file must key off `src=`, since a
+propagate row shares only the timestamp and `src=` with a sweep row.
+
+## How delivery actually works (and how it fails)
+
+`janitor/staleness-check.ps1` (`UserPromptSubmit`) TTL-sweeps `.inbox/`, matches `to_session` against
+its own `session_id`, **deletes each file and emits only what is confirmed gone**, under a `[message]`
+prefix, max 3 per turn (mine-first, then capped).
+
+Four ways a message is lost, all accepted or mitigated by design — say so if the user asks, and never
+imply delivery is guaranteed:
+
+1. Target never prompted again before the **4h TTL**. Expires undelivered.
+2. Target `/clear`ed: new session id, address no longer matches.
+3. Hook emits but the receiving model never surfaces it. Unfixable without an ack, and an ack is a store.
+4. A sibling hook blocks the turn (`expand`). **Mitigated:** the hook skips both emit and delete on
+   those prompts, so the message waits for the next one.
+
+If these start mattering in practice, the fix is the persistent-mailbox design in the plan's v1, a
+deliberate reversal — not a gap to patch incrementally.
+
+---
+
+# SYNC lane (detector-driven)
+
+## Guardrails
+- **Delegate for canonical stores; never hand-edit append-only sections.** Thread `## Decisions` /
+  `## Log` are append-only; `## Where I left off` / `## Next` and goals.md tasks are owned by their
+  modes. Apply changes ONLY via `/log` (`done|close|pause|fullclose`, or a normal capture) and
+  `/goals` (`done|set|link|review`).
+- **INDEX is derived — fixing it directly is allowed.** Regenerate affected row(s) from the thread
+  file(s); announce each fix with the before/after row.
+- **Confirm every judgment call once.** Deterministic INDEX regenerations apply + announce;
+  anything touching thread/goal content gets a single one-reply confirm before delegating.
+- **Never auto-rewrite narrative.** A `snapshot_trails_live` finding resolves by offering a normal
+  `/log` capture, not a direct edit.
+- **A sweep that finds unlogged work must PERSIST it, not just report it.** Surfacing relevant
+  unlogged state in-session and moving on is a silent regression: the finding dies with the
+  conversation and the next session re-derives it. When the live-session sweep (Step 2) turns up real
+  work that no store reflects, route it through `/log` in the same run (Did/Thinking/Next + a
+  `last_touched` bump), without waiting to be asked. Confirm the target thread, never whether to
+  capture at all.
+
+## Process
+### Step 1 — Refresh + read the report
+```
+powershell -NoProfile -File "%USERPROFILE%\.claude\janitor\detect-drift.ps1" -ClaudeDir "%USERPROFILE%\.claude" -Quiet
+```
+(Plugin install: the engine ships beside this skill's hooks — if the `janitor\` copy is absent, run
+`${CLAUDE_PLUGIN_ROOT}/scripts/detect-drift.ps1` with the same `-ClaudeDir` argument. Artifacts
+always land in `~/.claude/janitor/` either way.)
+(The scheduled task keeps this fresh in the background, but re-run anyway — it is cheap and
+guarantees the report reflects this second.) Read `~/.claude/janitor/drift-latest.json`. If
+`counts.total == 0` and step 2 adds nothing, say "no drift — stores are clean" and stop. If a
+`<kind>`/`<slug>` arg was given, filter to it.
+
+### Step 2 — Layer judgment (model-side checks the detector leaves open)
+Using live conversation + file context, additionally look for the judgment-only classes.
+
+**Do the live-session sweep FIRST** (it is the one class the detector structurally cannot see):
+- `unswept_live_session` — the detector only sees state that was WRITTEN to the stores. A concurrent
+  conversation that has not logged yet is invisible to every deterministic check, so a report reading
+  `counts.total == 0` does NOT mean the stores match reality. Sweep it explicitly:
+  1. For each active thread, take its `last_touched`. **If `threads/active/` is EMPTY, this
+     per-thread walk is a no-op — that is a new install's normal first-week state, NOT "nothing to
+     sweep". Fall back to the session-centric scan `/logall` uses: every `projects/*/` session
+     `*.jsonl` not recorded in `threads/.logall-processed.tsv` is a candidate. Skip to step 4 with
+     those candidates and emit one `unswept_live_session` finding naming each unlogged session
+     (suggest `/logall`, or `/log new` for the first thread, as the resolution).**
+  2. List `~/.claude/projects/*/` session `*.jsonl` files with an mtime **on or after** that date
+     (subagent transcripts under `*/subagents/` count as part of their parent session, not separately).
+     **On-or-after, not after:** `last_touched` is date-granular, so an exclusive comparison silently
+     drops every same-day session, and "two sessions on one effort in one day, the second unlogged" is
+     the most common real gap there is. Sessions older than every thread's `last_touched` but absent
+     from `.logall-processed.tsv` are still candidates — a thread date never bounds work that predates
+     the thread.
+  3. **Correlate artifacts first (free) — it tells you the effort MOVED, never WHO moved it.** Files
+     changed after `last_touched` under the effort's repo/project paths, and under per-session
+     scratchpads at `%TEMP%\claude\<project-key>\<session-id>\scratchpad`.
+     **That directory names the session that FIRST CREATED the file, not the one that last wrote it.**
+     Work continues where a file already lives, so continuations land in the original owner's
+     scratchpad. Measured 2026-08-07: both artifacts of one effort sat in `2431d5c9`'s scratchpad,
+     neither written by it, the real writers' scratchpads were empty, and `2431d5c9` was already in
+     `.logall-processed.tsv` — so path-as-attribution would have credited the work to a non-candidate
+     and reported nothing new. That is a silent miss in the direction this whole class exists to stop.
+     Use it as evidence unlogged work EXISTS and for its timestamp; resolve WHO by correlating the
+     file's mtime against candidate sessions' activity windows, confirmed from the transcript.
+  4. Only if step 3 is inconclusive, keyword-rank — **on the USER's turns only**, e.g. `grep -oE
+     '"role":"user","content":"[^"]{0,600}'` into a scratch file first, then grep that. Ranking whole
+     transcripts does not work: the session-start hook injects the EOD recap into EVERY session, so
+     recap topics score high everywhere. (Measured on this check's first live run: five unrelated
+     sessions all scored 600-1900 on export-kit terms from the whole file, and separated cleanly the
+     moment ranking moved to user turns.) **This is A signal, not THE signal** — it returned nothing
+     useful in the one unrehearsed trial, because the session holding the work talked about *kit
+     testing* and never named the effort. Keyword ranking separating nothing is an expected outcome,
+     not a reason to read every candidate.
+  5. **Read at most the top 3**, or **explicitly flag candidates as unswept** if you do not. Never let
+     an unread candidate pass as covered. Reading all of them is a failure of this step: measured
+     2026-08-07, an unrehearsed run read 8 transcripts to surface one changed file.
+     **Narrate before a slow check** (one line: what you are reading and why) and surface confirmed
+     findings as they land, rather than holding everything for one final answer. Hold back only what a
+     later step could reshape — never report "stores are clean" before the sweep finishes.
+  Emit a finding naming the thread, the session UUID, and what the session appears to hold that the
+  thread does not. A session already recorded in `threads/.logall-processed.tsv` is not a candidate.
+  **Never answer a state question ("what is left", "where are we", "did we resolve X") from
+  in-context memory alone, and never from the detector report alone.**
+
+Then the remaining judgment-only classes:
+- `next_item_looks_done` — a thread `## Next` or goals.md task done in reality but still `[ ]`.
+  When a fresh `eod-latest.md` digest exists, use its "What moved" / Did lines as the evidence
+  source (never invent completions; digest-in-progress items are NOT candidates).
+- `tracker_goal_lag` — a tracker item ticked `[x]` in `accountability/today.md` whose mapped
+  goals.md task (via `today-goalmap.tsv`) is still `[ ]`. Deterministic when the sidecar row
+  exists; confirm slice-vs-whole before flipping (a ticked SLICE leaves the parent task open).
+- `thread_goal_divergence` — a thread `## Next` pointer and a goals.md task that describe the same
+  work but disagree (one done, one open; or reworded apart). Surface + confirm; align by delegating
+  (`/log done` / `/goals done`) — NEVER auto-sync, the stores are deliberately decoupled.
+- `auto_capture_unconfirmed` — **detector-provided (not judgment-only), but it needs a human, so it
+  behaves like one.** A `/log auto` capture asserts a MODEL's guess at which thread the work belonged
+  to; until confirmed, that thread's narrative may be filed under the wrong effort. The detector emits
+  one finding per active thread carrying either trace (the `⚠ AUTO (AI-selected…)` marker anywhere in
+  `## Where I left off`, or an open `Confirm this auto-capture` item in `## Next`), escalating to `med`
+  past 7 days since `last_touched`. A finding naming only ONE of the two traces is a **partial clear**
+  and is more interesting than the normal case: it usually means a marker was stripped by hand, or a
+  box was ticked without running `/log confirm`.
+- `possible_redundancy` — two areas/threads covering one effort.
+- `cross_thread_contradiction` — the cross-thread pass: for each active thread, take its open
+  `## Next` items + questions in `## Where I left off`, and scan the OTHER active threads'
+  `## Decisions` (and recent `## Log` Did lines) for entries that answer or contradict them. Check
+  `related:` and same-`project` threads first; widen only if the scoped pass found something. Emit
+  a finding naming both threads, the open item, and the deciding entry, quoting each.
+Do not invent drift — cite the file text.
+
+### Step 3 — Present, grouped and tight
+**Auto-fix (INDEX)** first, then **confirm (content)**. One line each, most-severe first. The user
+is info-overload-sensitive — keep it scannable; do not paste file bodies.
+
+### Step 4 — Apply, by class
+- **`unswept_live_session`:** confirm the target thread (not whether to capture), then `/log` the
+  found work into it. If several sessions hit one thread, prefer `/logall` so each is walked
+  individually and the processed ledger is stamped. Candidates you chose not to read are reported as
+  unswept in Step 5, never omitted.
+  **`/logall` here means RUN IT NOW, in this session — it is the routing mechanism, not a deferral.**
+  "It can wait for tonight's `/logall eod`" is the failure mode this whole class exists to prevent:
+  the finding then dies with the conversation and the next session re-derives it from scratch. (Hit
+  live 2026-08-05: a sweep found 4 unlogged sessions and every one was deferred to the evening run,
+  which read as satisfying "prefer `/logall`" while violating the persist-in-the-same-run guardrail
+  above.) If the USER explicitly chooses to defer, that overrides — but then the Step-5 report must
+  name each deferred session as **unpersisted**, not merely "swept". A deferred sweep is an open
+  finding, so leave the drift unresolved rather than reporting the lane clean.
+- **`auto_capture_unconfirmed`:** batch them, never one prompt per thread — this backlog runs to
+  double digits, so a per-thread walk is what made it accumulate. **READ each affected thread's
+  AUTO-marked paragraph (and/or the auto Log entry) FIRST and quote what the capture actually
+  claimed in the message that carries the question** — a slug plus "confirm this auto-capture" is
+  unanswerable; the user cannot confirm content they were never shown (2026-08-05 lesson: both
+  confirms bounced back with "you never showed me"). Then present ONE multiSelect
+  `AskUserQuestion` pass listing the affected threads (most-stale first, `med` before `low`), each
+  option labelled with the slug + a one-line summary of the claim, plus a `— none of these —` sentinel.
+  Respect the popup limits (≤4 options per question, ≤4 questions per call, split rather than
+  truncate). For each thread the user ticks, delegate to **`/log confirm <slug>` (3f)**, which is the
+  only sanctioned clearer. Guardrails: a thread the user does NOT tick stays marked — silence is not
+  confirmation, and never clear a marker as a side effect of anything else. For a **partial clear**,
+  say which trace is missing and let the user decide whether the check actually happened; do not infer
+  it from the surviving trace. If the user cannot remember whether a capture was right, leave it open
+  and say so — an unverified confirm is worse than an open one.
+- **`index_*` (auto-fix, derived):** regenerate the affected INDEX row(s) from the thread file(s) —
+  row format `| [[slug]] | project | prio | MM-DD(last_touched) | first-sentence-of-Where-I-left-off |`.
+  `malformed_index_row` → split the merged line; `index_wrong_table` → move the row. Apply +
+  announce (show before/after).
+- **`snapshot_trails_live`:** offer a normal `/log` capture on the named thread. Confirm, delegate.
+- **`status_claims_done`:** confirm actually finished → `/log close`/`fullclose`; else suggest a
+  `## Next` item via a normal capture.
+- **`next_item_looks_done`:** confirm → `/log done <slug>` or `/goals done <id>`.
+- **`tracker_goal_lag`:** confirm whole-task (not slice) → flip the goals.md task via `/goals done`.
+- **`thread_goal_divergence`:** confirm which side is truth → delegate the lagging side's tick;
+  never copy text between stores.
+- **`over_rolled_goal`:** surface for `/goals review` (re-scope, re-time, or drop — not a re-roll).
+- **`goal_area_unkeyed`:** add the missing `id:` metadata line (confirm the intended id).
+- **`possible_redundancy`:** propose a merge/link → `/goals link` / `/log merge` / a close; always
+  confirm.
+- **`cross_thread_contradiction`:** confirm the deciding entry settles it (quote both sides) →
+  `/log done <slug>` or a capture closing the question with `see [[deciding-slug]]`. Link, never
+  copy.
+- **`live_read_failed`:** report the area + the precondition (e.g. the live_progress command only
+  reports correctly on a specific git branch); the user's to fix.
+- **`links_goal_orphan` / `links_thread_orphan`:** confirm truly gone (not renamed) → remove the
+  dead edge from `links.tsv` (filter-rewrite — tabs mangle under line edits); if renamed, fix the
+  target.
+- **`memory_index_drift`:** missing file → remove the stale pointer; unpointed file → add a
+  one-line pointer. Confirm direction.
+
+### Step 5 — Re-emit + report + leave a trace
+Re-run `detect-drift.ps1 -Quiet` so the report (and the banner/hook count) reflects the fixes.
+Report applied vs deferred, **plus any live sessions left unswept** (UUID + why). A clean report with
+unswept sessions behind it is a partial result, so say so rather than declaring the stores clean.
+
+**Then append ONE line to `~/.claude/janitor/sweep-log.md`** (create with an `# Sweep log` header if
+absent), tab-separated:
+
+```
+- <ISO timestamp>  cand=<N> read=<N> found=<N> persisted=<N> deferred=<N>  threads=<slug,slug>  src=reconcile
+```
+
+Why this exists: `unswept_live_session` is model-side judgment, so unlike every deterministic finding
+it writes NOTHING to `drift-latest.json` and leaves no artifact once the conversation ends. That made
+the cross-conversation sweep — the whole point of the 0.1.7 bump — structurally unmeasurable: 218
+detector runs of history could show the deterministic half catching 219 INDEX drifts and say literally
+nothing about whether the sweep ever fired. One line per sweep fixes that, and it is the honest way to
+answer "is this machinery doing anything, or have I just gotten better at not desyncing?" — which
+needs a few weeks of rows, not an opinion. `cand` = candidates the mtime scan produced, `read` = how
+many you actually read (never let this silently equal `cand`), `found` = held real unlogged work,
+`persisted` = written to a thread THIS run, `deferred` = user-overridden. Zeroes are informative;
+write the line even when nothing was found.
+
+---
+
+# STATUS-UPDATE lane (absorbed from /update-statuses)
+
+An interactive walk-through truing the records to what actually happened — mid-day after a burst of
+work, or an end-of-day close. **Consumer of the `/eod` digest, never a re-scanner of raw
+transcripts.**
+
+### Step 0 — Digest freshness
+Read `~/.claude/session-notes/eod-latest.md`. `/eod` is user-invoked only
+(`disable-model-invocation`), so the model cannot generate the digest itself:
+- **Absent** → ask the user to type `/eod`, then continue when it lands; if they decline, run the
+  stations from thread `## Log` Did-lines + the live session alone and SAY the digest was skipped.
+- **Stale** (thread files or non-home-project JSONLs newer than it) → same ask; a stale digest may
+  still be used if the user prefers, named as stale.
+- **Nothing changed since the last digest** → warn once ("little to reconcile — run anyway?"), let
+  the user abort. The digest is the prep-sheet for all stations.
+
+### Station 1 — Done check-offs (threads)
+Cross-reference open thread `## Next` items against the digest + `## Log` Did lines. Candidates
+only where evidence supports it. Present via multiSelect popup (+ `— none done —` sentinel; ≤4
+options/question, ≤4 questions/call, split rather than truncate). Ticked → `/log done`'s tick
+(flip + `last_touched` bump + INDEX row).
+
+### Station 2 — Goal done-pass (areas)
+Same for goals.md tasks — prioritized by the two deterministic lags: `tracker_goal_lag` (sidecar
+rows ticked in the tracker but open in goals.md) and linked-thread `[x]` vs area-task `[ ]`. Ticked
+→ `/goals done`'s flip. **Done-only** — never drop/roll/re-scope here (that is `/goals review`).
+
+### Station 3 — Uncaptured-work routing
+From the digest's decisions/in-progress + the live session, identify work/decisions not reflected
+in any store. Cluster; per cluster offer: `/log` to a thread / new thread / memory / drop
+(conscious, noted). Execute the chosen route. Everything already captured → say so, move on.
+
+### Station 4 — Recap (chat-only)
+What got ticked/routed, which stations were empty, and the 1–3 most important carry-forwards (one
+line each, smallest next step). Do NOT set the day's plan — that is `/today`.
+
+Guardrails: never invent completions; an empty station is a valid result; reuse `/log done` +
+`/goals done` mechanics exactly, never fork them.
+
+---
+
+# Passive freshness layer (detection without invocation)
+
+The goal: any session is always working against the newest state (git, threads, goals, other
+conversations) WITHOUT the user remembering to check. Three pieces, built 2026-07-31:
+
+1. **On-demand headless detector refresh.** The prompt-time hook (piece 3) checks
+   `drift-latest.json`'s age; when older than ~10 minutes it spawns ONE detached hidden
+   `detect-drift.ps1 -Quiet` run (fire-and-forget, report-only, writes only the janitor artifacts).
+   So the detector runs only while Claude is actually in use — nothing polls in the background when
+   idle. (The earlier `ClaudeDriftDetect` 15-min scheduled task was replaced by this on 2026-07-31.)
+2. **Session-start banner** (existing) surfaces the drift count when a session opens.
+3. **Prompt-time staleness hook.** A `UserPromptSubmit` hook (`janitor/staleness-check.ps1`)
+   injects a one-line context note into the running conversation when (a) `drift-latest.json` has
+   findings, or (b) a store file (threads/goals.md/INDEX/today.md) changed after the session
+   started — i.e. another conversation moved state mid-session. The note names what changed and
+   points here. It injects at most once per change-set (stamped in `janitor/staleness-seen.json`
+   per session) so it nags, but only once per staleness.
+
+The passive layer NEVER writes stores — it detects and surfaces; resolution stays in-session here
+(confirm-gated), except derived INDEX fixes which this skill auto-applies when run. When the hook's
+note appears mid-conversation, re-read the named store file(s) before answering anything that
+depends on them — that is the "aggressively current" contract.
+
+**Known blind spot (the reason for the `unswept_live_session` sweep).** All three pieces key off
+**store files**, so they only see state a conversation has already WRITTEN. A live session holding
+real unlogged work moves no store file and therefore triggers nothing: no drift count, no staleness
+note, no banner change. Silence from the passive layer is evidence that nothing was *written*, never
+evidence that nothing *happened*. Any state question has to sweep the live sessions directly
+(SYNC lane Step 2), which is a model-side read, not something the detector can be taught.
+
+## Versioning
+- New cleanliness categories: add a finding `kind` in `detect-drift.ps1` + a Step-4 handling line.
+- `auto_capture_unconfirmed` staleness threshold is `$AUTO_STALE_DAYS` in `detect-drift.ps1` (7 days,
+  measured off `last_touched` since that is the only date the frontmatter carries). The marker scan
+  reads the WHOLE `## Where I left off` section deliberately — checking only its first line
+  misreported every thread whose marker had been demoted under a `Prior:` paragraph by a later capture.
+- If the detector and this skill disagree on a `kind`, the detector's schema wins; update this file.
+- History: `/update-statuses` folded in 2026-07-31 (its stations 1–3+5 became the STATUS lane;
+  station 4 quick-wins dropped — the board surfaces near-done items). Trigger phrases migrated to
+  the description above.

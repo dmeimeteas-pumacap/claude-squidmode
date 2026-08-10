@@ -9,11 +9,9 @@ in that slice, with depth-tiered output, prioritization, a resumable coverage le
 theme-deduplicated batched checkpoint so the user answers a handful of questions rather than one per
 project.
 
-> **Status: provisional starting point.** Conventions for the documentation family are still
-> settling. This is tier 2 of three: `document-process` (one project), **`document-section`** (a
-> slice), and `document-overall` (the unified system overview, not yet built). A future "documenter
-> agent" that orchestrates these or runs as an automatic watchdog is deliberately deferred until
-> after `document-overall`.
+> This is tier 2 of three: `document-process` (one project), **`document-section`** (a
+> slice), and `document-overall` (the flow-synthesis manager and freshness actuator). The
+> `document-concerns` skill owns the concern-ledger rules; this skill only flags (Phase E.7).
 
 ## Model and effort
 
@@ -44,7 +42,7 @@ Trigger when the user says something like:
 
 Do **not** trigger for:
 - A single project/service/file → use `document-process`.
-- The unified, cross-cutting system narrative → use `document-overall` (when it exists).
+- The unified, cross-cutting system narrative → use `document-overall`.
 
 ## Inputs you need
 
@@ -56,16 +54,24 @@ Do **not** trigger for:
 
 ## What to produce
 
-- A documentation file per target at **`docs/<SectionName>/<ProjectName>.md`** (produced by
-  `document-process` at the assigned depth tier). The section name is derived from the section spec
-  (e.g., `AzFn`, `WinSvc`, `CoreLib`). The project name drops the common prefix (e.g.,
+- A documentation file per target at **`Documentation/sections/<SectionName>/<ProjectName>.md`** (produced by
+  `document-process` at the assigned depth tier). **Match the repo's existing documentation root** if
+  one exists — in this repo that is `Documentation/sections/` (the prior AzFn run wrote `Documentation/sections/AzFn/`),
+  NOT a fresh `docs/` tree. Never write per-target files inside the project directories themselves;
+  they all land under the single central documentation root. The section name is derived from the
+  section spec (e.g., `AzFn`, `WinSvc`, `CoreLib`). The project name drops the common prefix (e.g.,
   `ContraParserSvc`, not `Squid.AzFn.ContraParserSvc`).
 - A **coverage ledger** at `.claude/coverage/documentation-coverage.md`, updated with depth tier
   per target row. Open question counts use three columns: `H/L/R` (human-high, human-low,
   ref-blocked).
-- A **section summary** at the end: counts, depth-tier breakdown, doc links, **cross-cutting
-  findings** (stated once here, not repeated per target), outstanding low-priority questions, and
-  anything excluded.
+- A **section synthesis document** — a standing artifact at **`Documentation/sections/<SectionName>.md`** (one
+  level below the master `document-overall` page, mirroring how a viz clusters a subsystem).
+  This is the page a reader opens FIRST; per-target files are drill-down. It MUST contain: a short
+  "how the cluster fits together" orientation paragraph (what binds these services — shared runtime,
+  transport, or library), a one-line-per-service "at a glance" table linking each per-target doc, and
+  a dedicated **`## Concerns Raised`** section that OWNS every cross-cutting/systemic finding (stated once here, never repeated
+  in each per-target doc — the per-target docs link back to it). Also: counts, depth-tier breakdown,
+  and anything excluded. Keep it to roughly one screen; it is a map, not a re-narration.
 
 ## Process — Phases
 
@@ -121,12 +127,19 @@ Before dispatching, assess each target's complexity and assign a depth tier. Thi
 `document-process` produces and which passes it runs. The classification is intentionally lightweight
 — read only the `.csproj` and file list, not source:
 
-- **Brief**: ≤2 source `.cs` files beyond `Program.cs`, no Kraken4 `ProjectReference`, entry
-  class clearly just wires DI and delegates to one imported library. Most `Squid.AzFn.*` trigger
-  wrappers qualify.
+- **Brief**: a genuine trigger-wrapper or throwaway — ≤2 source `.cs` files, no Kraken4
+  `ProjectReference`, AND **no substantial first-party `Squid.*` service library behind it**. Most
+  `Squid.AzFn.*` trigger wrappers qualify. A scratch/experiment project qualifies.
 - **Standard**: 3–10 source files, real logic but bounded scope, limited or no Kraken4 exposure.
-- **Detailed**: Kraken4-facing API surface, complex state machine, high operational risk, or >10
-  source files with non-obvious interactions.
+- **Detailed**: Kraken4-facing API surface (e.g. a NetMQ/WCF request-response server), complex state
+  machine, high operational risk, or >10 source files with non-obvious interactions.
+
+**Thin-host caveat (do not tier on local file count alone).** A `Squid.WinSvc.*` host is typically a
+2-file `Program.cs`+`Worker.cs` shell that delegates all logic to a referenced first-party library
+(e.g. `Squid.MarketDataSvc`). File count would wrongly mark it Brief. For any host that delegates to a
+substantial `Squid.*` service library, **inspect that library's `.csproj`/role** and tier on IT:
+Standard minimum for a production host; Detailed if the library exposes a NetMQ/WCF server surface or
+reaches Kraken4. Never assign Brief to a live production host just because its own directory is thin.
 
 When borderline, go one tier higher — easier to trim than to discover a gap later. Record the tier
 in the ledger.
@@ -143,15 +156,25 @@ For Standard and Detailed tier targets, dispatch `document-process` per target v
 waves that respect the Task tool's concurrency limit. Each subagent is instructed to run
 `document-process` in **autonomous mode** with:
 - The **depth tier** assigned in Phase B.5 (skip Pass 0.5 — tier is already known).
-- The **output path**: `docs/<SectionName>/<ProjectName>.md`.
+- The **output path**: `Documentation/sections/<SectionName>/<ProjectName>.md`.
 - The **create or update mode** per the ledger.
 - **System overview context** — the relevant excerpt extracted in Phase B.0, if available. The
   subagent uses this in Pass 0 without reloading the full file.
 - **Skip the interactive checkpoint** (Pass 6). Do not prompt the user from inside a target.
-- For **Standard** tier: instruct `document-process` to omit the "Running / debugging locally",
-  "Key types", and "Related" sections — these are boilerplate for thin hosts and add length without
-  value. Purpose, data flow, configuration, gotchas, gaps, and open questions are retained.
-- For **Detailed** tier: full `document-process` run, all passes, all sections.
+- **Never reproduce secret VALUES in a doc.** If a target commits a key, password, connection string,
+  or private key, reference it by config-key name + file location and flag it as a finding — do NOT
+  copy the literal value into the markdown. The doc must not become a secret-bearing artifact. (A
+  committed secret is a cross-cutting finding: route it to the section doc's `## Concerns Raised`.)
+- **Return ONLY the structured object**, no prose preamble — the orchestrator parses it. (Observed
+  drift: subagents wrapping the JSON in narrative. If dispatched via Workflow, use the `schema`
+  option to force this.)
+- The template (`README-template.md`) is now lean by default (what / how / use + gotchas + gaps +
+  open questions). **Tier controls DEPTH, not which sections exist**, so every tier uses the same
+  section order:
+  - **Standard:** the lean template as-is. Keep "How it works" to the essential path and "How to
+    run / use it" to the config/deploy that matters. Thin-host docs should land well under a screen.
+  - **Detailed:** same sections, but "How it works" and "How to run / use it" carry the extra depth
+    (state machine, protocol surface, API entry points for libraries). Still no re-narration.
 - **Return structured output:** `{ status, mode, tier, outputPath, openQuestions[] }`, where each
   open question carries a one-line reason and a **relevance tag** (high / low — see Phase D).
 
@@ -200,15 +223,34 @@ dedicated callout in the Phase E section summary, not duplicated in each per-tar
 ### Phase E — Section summary + finalize ledger
 - Write final ledger statuses and depth-tier breakdown. Open question counts use `H/L/R` (human-high
   / human-low / ref-blocked) per target row.
-- Produce a summary covering:
-  - Counts: documented / updated / skipped / failed, with per-tier breakdown (Brief / Standard /
-    Detailed).
-  - Links to each output doc.
-  - **Cross-cutting findings** — any theme representing a systemic issue, stated once for the whole
-    section.
-  - Remaining lower-priority `[human]` questions still open in docs.
-  - Count of `[ref:]` questions pending backfill, by referenced project.
-  - What was excluded (and why). No silent truncation.
+- Write (or update) the **section synthesis document** `Documentation/sections/<SectionName>.md` (see *What to
+  produce*). It covers:
+  - The "at a glance" table: one line per service, linking its per-target doc.
+  - **`## Concerns Raised`** — the systemic/cross-cutting findings, stated ONCE here for the whole
+    section. This is the section's most important content; every finding that recurs across 2+
+    targets belongs here, not duplicated in the per-target docs.
+  - Counts: documented / updated / skipped / failed, with per-tier breakdown.
+  - Remaining lower-priority `[human]` questions, `[ref:]` backfill count, and what was excluded
+    (no silent truncation).
+- **Brevity is a hard requirement, not a nicety** (the user is information-overload sensitive). Push
+  every cross-cutting finding UP into `## Concerns Raised` and leave only a one-line back-pointer in
+  the per-target docs. Enforce the Phase C section-omissions so Standard docs stay lean. Target the
+  synthesis doc to ~one screen and Standard per-target docs to well under a screen. Less text wins.
+
+### Phase E.7 — Flag new concerns for reconciliation (replaces the retired E.5/E.6)
+The master overview and the concerns ledger are no longer touched by this skill (single source of
+truth: `document-overall` owns the master and the section→master edge; `document-concerns` owns the
+ledger rules; `document-overall` Phase 6 reconciles). On a run that surfaces a NEW concern:
+- APPEND one row per concern to the pending-flag queue `Documentation/concerns-pending.md`
+  (create-if-missing with the header row):
+  `| Date | Source (skill/run/audit row) | Affected project or doc (path) | Concern (one line) |`
+- Producers append only — never write `concerns-ledger.md` or `system-overview.md` directly.
+  `document-overall`'s next run sweeps the queue, reconciles through `document-concerns` (dedup,
+  ledger entry, back-links), and empties it.
+- The per-section `## Concerns Raised` stays put — it is the section-local view and the per-target
+  back-link target. The canonical concern model is stated once, in `document-concerns/SKILL.md`.
+- **Never reproduce secret VALUES** — reference by config-key name + file location, same rule as the
+  docs.
 
 ### Phase F — Automatic backfill (cross-reference resolution)
 Runs automatically after Phase E, without user prompting.

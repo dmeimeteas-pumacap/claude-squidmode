@@ -6,6 +6,8 @@ set -euo pipefail
 # hookSpecificOutput.additionalContext (full context for Claude).
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# Hook stdin payload — only session_id is consumed (run-from state, see below).
+PAYLOAD="$(cat 2>/dev/null || true)"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _STRIP="${HOOK_DIR%%/plugins/*}"
 if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
@@ -34,10 +36,16 @@ fi
 # Morning recap source. We surface the most recent EOD synthesis as a recap above the
 # thread board on EVERY session (not just the first of the day), regardless of how old it
 # is — EOD_RECAP_DATE is parsed whenever eod-latest.md exists and the block renders if it
-# is non-empty. RECAP_IS_FRESH=1 only when that EOD is dated yesterday; it no longer gates
-# the recap banner, but the first-session recovery path and marker write below still use it
-# to decide whether to nudge a /eod regeneration.
+# is non-empty. RECAP_IS_FRESH=1 when that EOD covers the PRIOR WORKDAY or later (so a
+# Monday briefs from Friday's EOD instead of taking the recovery path for a session-less
+# Sunday); it no longer gates the recap banner, but the first-session recovery path and
+# marker write below still use it to decide whether to nudge a /eod regeneration.
 YESTERDAY="$(date -d 'yesterday' +%Y-%m-%d 2>/dev/null || true)"
+case "$(date +%u)" in
+  1) PRIOR_WORKDAY="$(date -d '3 days ago' +%Y-%m-%d 2>/dev/null || true)" ;;  # Mon -> Fri
+  7) PRIOR_WORKDAY="$(date -d '2 days ago' +%Y-%m-%d 2>/dev/null || true)" ;;  # Sun -> Fri
+  *) PRIOR_WORKDAY="$YESTERDAY" ;;                                             # Tue-Sat -> yesterday
+esac
 EOD_FILE="$NOTE_DIR/eod-latest.md"
 EOD_RECAP_DATE=""
 RECAP_PROJECTS=""
@@ -45,9 +53,11 @@ RECAP_NEXT=""
 RECAP_IS_FRESH=0
 LF=$'\n'
 if [ -f "$EOD_FILE" ]; then
-  # Single awk pass over the EOD file: recap date + first 3 "Projects touched"
-  # bullets + first 3 "Tomorrow's priorities". Was three forks (a grep|grep|head
-  # date parse here plus two awks in the recap block); now one.
+  # Single awk pass over the EOD file: recap date + first 3 "What moved today"
+  # item bullets + first 3 "Tomorrow's priorities". Was three forks (a grep|grep|head
+  # date parse here plus two awks in the recap block); now one. The section match
+  # also accepts the legacy "Projects touched" header so an eod-latest.md written
+  # before the What-moved rename still populates the recap until the next /eod run.
   while IFS=$'\t' read -r _kind _val; do
     case "$_kind" in
       date) EOD_RECAP_DATE="$_val" ;;
@@ -56,13 +66,13 @@ if [ -f "$EOD_FILE" ]; then
     esac
   done < <(awk '
     /^# EOD/ && !dd { if (match($0,/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) { print "date\t" substr($0,RSTART,RLENGTH); dd=1 } }
-    /^## Projects touched/ { p=1; n=0; next }
+    /^## (What moved today|Projects touched)/ { p=1; n=0; next }
     /^## Tomorrow.s priorities/ { n=1; p=0; next }
     /^## / { p=0; n=0 }
     p && /^- / && pc<3 { print "proj\t" $0; pc++ }
     n && /^[0-9]+\./ && nc<3 { print "next\t" $0; nc++ }
   ' "$EOD_FILE")
-  if [ "$FIRST_SESSION_TODAY" = "1" ] && [ -n "$EOD_RECAP_DATE" ] && [ -n "$YESTERDAY" ] && [ "$EOD_RECAP_DATE" = "$YESTERDAY" ]; then
+  if [ "$FIRST_SESSION_TODAY" = "1" ] && [ -n "$EOD_RECAP_DATE" ] && [ -n "$PRIOR_WORKDAY" ] && [ ! "$EOD_RECAP_DATE" \< "$PRIOR_WORKDAY" ]; then
     RECAP_IS_FRESH=1
   fi
 fi
@@ -118,39 +128,59 @@ clip_line() {
 IS_REPO=0
 if git -C "$PROJECT_DIR" rev-parse --git-dir &>/dev/null 2>&1; then IS_REPO=1; fi
 
-# Git context (additionalContext only — not shown in banner).
+# Launch location: where THIS Claude Code process is running from. Shown once at
+# the top of the banner — the statusline's "current repo" tracks where work is
+# actively happening instead (see statusline.ps1). LAUNCH_KEY/LAUNCH_LABEL are
+# also persisted per-session so hooks/run-from-watch.sh can reprint on change.
+# LAUNCH_DIR comes from the payload's cwd (Windows-style, same form the
+# UserPromptSubmit watcher sees) so the two hooks' keys compare equal; PROJECT_DIR
+# ($(pwd) fallback) is POSIX-style under git-bash and would false-trigger the
+# watcher on the first prompt.
+LAUNCH_DIR="$(printf '%s' "$PAYLOAD" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\(\([^"\\]\|\\.\)*\)".*/\1/p')"
+LAUNCH_DIR="${LAUNCH_DIR//\\\\/\\}"
+[ -n "$LAUNCH_DIR" ] || LAUNCH_DIR="$PROJECT_DIR"
+LAUNCH_TOP="$(git -C "$LAUNCH_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$LAUNCH_TOP" ]; then
+  LAUNCH_LABEL="$(basename "$LAUNCH_TOP")"   # git emits forward slashes, basename-safe
+  LAUNCH_KEY="$LAUNCH_TOP"
+else
+  LAUNCH_LABEL="$LAUNCH_DIR (no repo)"
+  LAUNCH_KEY="$LAUNCH_DIR"
+fi
+
+# Git context (additionalContext only — not shown in banner). Built into its own
+# variable and appended AFTER the recap block below: the working tree can be long,
+# and when the harness clips oversize additionalContext to a preview, whatever
+# leads is all the model sees — the recap must win that race, not git noise.
 # Skipped when a project session-start hook already emits it (see PROJECT_EMITS_GIT).
+GIT_CONTEXT=""
 if [ "$PROJECT_EMITS_GIT" != "1" ] && [ "$IS_REPO" = "1" ]; then
   BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
-  COMMIT_COUNT=$(git -C "$PROJECT_DIR" log --oneline -8 2>/dev/null | wc -l | tr -d ' ')
-  FULL_CONTENT="## Session Context
+  # Working tree: .run-from/ churn is per-session bookkeeping noise, filtered out;
+  # the rest is capped at 25 lines to keep the whole payload under the harness
+  # inline limit (an oversize payload gets persisted to a file and preview-clipped).
+  WT_STATUS=$(git -C "$PROJECT_DIR" status --short 2>/dev/null | grep -v '\.run-from/' | head -n 25 || true)
+  GIT_CONTEXT="## Session Context
 Branch: $BRANCH
 
 ### Recent commits
 $(git -C "$PROJECT_DIR" log --oneline -8 2>/dev/null)
 
-### Working tree
-$(git -C "$PROJECT_DIR" status --short 2>/dev/null)
+### Working tree (.run-from/ noise filtered, capped at 25 lines)
+$WT_STATUS
 "
-  # Git-ack instruction. Suppressed on the first session of the day, where the
-  # morning orientation/recap owns the first reply (the two instructions otherwise
-  # overlap). Subsequent sessions still get the one-line acknowledgment.
-  if [ "$FIRST_SESSION_TODAY" != "1" ]; then
-    FULL_CONTENT="$FULL_CONTENT
-## Instruction
-Begin your first reply with exactly one line acknowledging this context, e.g.:
-\"Session loaded: branch $BRANCH, $COMMIT_COUNT recent commits.\"
-Keep it to one line -- no extra commentary.
-"
-  fi
+  # Git-ack instruction removed 2026-07-21: the "Session loaded: branch X" line
+  # confused sessions whose topic had nothing to do with the ~/.claude branch.
+  # The git context above still rides along silently as background.
 fi
 
 # Freshest EOD recap into Claude's context (additionalContext), not only the
 # terminal banner. The banner's RECAP_BLOCK is systemMessage-only, so without this
 # the model briefs from the (possibly lagging) INDEX "Where I left off" one-liners
-# and never sees the newest synthesis. Injected before the thread table so it leads
-# and survives the additionalContext preview clip; reuses the fields already parsed
-# in the single EOD awk pass above (top 3 projects + top 3 priorities).
+# and never sees the newest synthesis. Placed FIRST in FULL_CONTENT (ahead of the
+# git context) so it leads and survives the additionalContext preview clip; reuses
+# the fields already parsed in the single EOD awk pass above (top 3 What-moved
+# items + top 3 priorities).
 if [ -n "$EOD_RECAP_DATE" ]; then
   FULL_CONTENT="$FULL_CONTENT
 ## Freshest recap — EOD ${EOD_RECAP_DATE}
@@ -158,13 +188,27 @@ This EOD synthesis is the most recent record of the user's work. Lead the mornin
 briefing from THIS recap and each thread's live \"## Next\" items below, NOT from the
 thread-table \"Where I left off\" one-liners, which can lag behind the latest EOD.${RECAP_PROJECTS:+
 
-**Projects touched**
+**What moved**
 $RECAP_PROJECTS}${RECAP_NEXT:+
 
 **Priorities**
 $RECAP_NEXT}
 "
+  # Spoken-recap instruction (first session of the day, normal path only — the
+  # recovery path below carries its own instruction). Without this the recap was
+  # banner-only and the model never delivered it unprompted; the user had to ask.
+  if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" = "1" ]; then
+    FULL_CONTENT="$FULL_CONTENT
+## Instruction — first session today
+Open your first reply with a short morning recap built from the block above: what
+moved (2-3 lines), then the priorities, THEN address the user's message. Do not
+mention branch/repo/git state. Skip the recap only if the user's first message is
+clearly mid-task and time-sensitive.
+"
+  fi
 fi
+
+FULL_CONTENT="$FULL_CONTENT$GIT_CONTEXT"
 
 # Active-thread dashboard
 ACTIVE_ROWS=""
@@ -237,8 +281,15 @@ if [ -n "$ACTIVE_ROWS" ]; then
         _name="${_name#dimitri-}"
         clip_line "$_name" 28; _name="$REPLY"
         _det="${_ln#*— }"
-        [ "$_det" = "$_ln" ] && _det="${_ln#- }"
+        if [ "$_det" = "$_ln" ]; then
+          # Hyphen-style EOD lines: fall back past "- ", then drop the bold
+          # name span already rendered as $_name so it doesn't repeat.
+          _det="${_ln#- }"
+          case "$_det" in \*\**) _det="${_det#*\*\*}"; _det="${_det#*\*\*}" ;; esac
+          _det="${_det# }"; _det="${_det#- }"
+        fi
         trim "$_det"; _det="$REPLY"
+        _det="${_det//\*\*/}"
         clip_line "$_det" "$((_cw - ${#_name} - 11))"; _det="$REPLY"
         if [ "$_i" = 1 ]; then _pre="  ${BOLD}Did ${RESET}  "; else _pre="$GUT"; fi
         RECAP_BLOCK="${RECAP_BLOCK}${_pre}${_name} — ${_det}${NL}"
@@ -265,6 +316,7 @@ if [ -n "$ACTIVE_ROWS" ]; then
         esac
         _tag="${_tag#dimitri-}"
         trim "$_txt"; _txt="$REPLY"
+        _txt="${_txt//\*\*/}"
         clip_line "$_txt" "$((_cw - 12))"; _txt="$REPLY"
         if [ "$_i" = 1 ]; then _pre="  ${BOLD}Next${RESET}  "; else _pre="$GUT"; fi
         if [ -n "$_tag" ]; then
@@ -350,9 +402,13 @@ if [ -n "$ACTIVE_ROWS" ]; then
     [ -n "${TOPIC_MAP[$slug]:-}" ] && topic="${TOPIC_MAP[$slug]}"
     next_items="${NEXT_MAP[$slug]:-}"
 
-    # Numbered briefing-table row (additionalContext): prepend a # column to the
-    # raw INDEX row by inserting it after the leading pipe.
-    THREAD_ROWS="${THREAD_ROWS}| ${ROW_NUM} | ${row#| }
+    # Numbered briefing-table row (additionalContext): rebuilt from the parsed
+    # fields with the "Where I left off" column clipped to 200 chars — the recap
+    # header already tells the model NOT to brief from these one-liners, and at
+    # full length this column alone was ~6KB of payload pushing the whole
+    # additionalContext past the harness inline limit.
+    clip_line "$where" 200; where_ctx="$REPLY"
+    THREAD_ROWS="${THREAD_ROWS}| ${ROW_NUM} | [[${slug}]] | ${project} | ${pri} | ${last} | ${where_ctx} |
 "
 
     # Banner: top 5 threads, then a single overflow line
@@ -410,6 +466,24 @@ ${THREAD_ROWS%$'\n'}
 
 _Drill into one with \`/catchup <slug>\` (or \`/catchup <n>\`), or see all with \`/catchupall\`._"
 
+  # Co-evolving sibling awareness: surface declared `coevolves_with` pairs so the model treats
+  # them as one context (matches /catchup's lazy sibling load). Defensive under set -e.
+  COEVOLVE_PAIRS=$(awk '
+    FNR==1{slug=""}
+    /^slug:/{slug=$2}
+    /^coevolves_with:[ \t]*\[/{
+      line=$0; sub(/^coevolves_with:[ \t]*\[/,"",line); sub(/\].*/,"",line);
+      n=split(line,a,","); for(i=1;i<=n;i++){gsub(/[ \t]/,"",a[i]);
+        if(a[i]!=""){print (slug<a[i])?slug"~"a[i]:a[i]"~"slug}}}
+  ' "$CLAUDE_DIR"/threads/active/*.md 2>/dev/null | sort -u || true)
+  if [ -n "$COEVOLVE_PAIRS" ]; then
+    COEVOLVE_FMT=$(printf '%s\n' "$COEVOLVE_PAIRS" | sed 's/~/]] ⇄ [[/; s/^/  · [[/; s/$/]]/' || true)
+    THREAD_TABLE="$THREAD_TABLE
+
+_Co-evolving pairs — when working either, the other is contextually relevant (lazy sibling load, see /catchup):_
+$COEVOLVE_FMT"
+  fi
+
   # The `expand` keyword is handled deterministically by the UserPromptSubmit
   # hook (hooks/expand-prompt.sh), which renders this overview table directly to
   # the user. It is intentionally NOT injected here: doing so pushed this
@@ -456,44 +530,73 @@ $(cat "$TODO")
 "
 fi
 
-# First session of the day. Normal path: the recap banner above is rendered by this
-# hook and the marker is claimed below, so no skill needs to run. Recovery path (no
-# EOD dated yesterday): instruct a /eod regeneration, then a /goals nudge.
+# First session of the day. Normal path: the recap banner + spoken-recap instruction
+# above cover it and the marker is claimed below, so no skill needs to run. Recovery
+# path (no EOD covering the prior workday): instruct a /eod regeneration, then a
+# /goals nudge.
 if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ] && [ "$FRESH_USER" != "1" ]; then
   FULL_CONTENT="$FULL_CONTENT
-## First session today — no recap from yesterday (${YESTERDAY})
-There is no EOD synthesis dated ${YESTERDAY}. Before addressing the user's first message, run the
-\`eod\` skill for ${YESTERDAY} to generate yesterday's recap and check for uncaptured sessions, then
-summarize it in one short paragraph and remind the user to run \`/goals\` to set today's goals and
-plan. After the recap is shown, write \`${TODAY}\` to \`.last-orientation\` (UTF-8, no BOM) so this
-does not re-fire this session.
+## First session today — no recap from the prior workday (${PRIOR_WORKDAY})
+The latest EOD synthesis (${EOD_RECAP_DATE:-none}) predates the prior workday. Before addressing the
+user's first message, run the \`eod\` skill for ${PRIOR_WORKDAY} to generate that day's recap and
+check for uncaptured sessions, then
+summarize it in one short paragraph and remind the user to run \`/today\` to plan the day (and
+\`/goals\` to review the standing areas). After the recap is shown, write \`${TODAY}\` to
+\`.last-orientation\` (UTF-8, no BOM) so this does not re-fire this session.
 "
-fi
-
-# First-session call to action. The recap above shows where you left off; the day's
-# plan is yours to set, so nudge /goals (replaces the old morning-brief warning).
-# Appending to BANNER_CONTENT also forces the systemMessage branch below even with no
-# threads, so the nudge still shows on a thread-less first session. Suppressed for a fresh
-# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /goals prompt with no context yet.
-if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$FRESH_USER" != "1" ]; then
-  _W_RESET=$'\033[0m'
-  _W_ACCENT=$'\033[38;2;177;185;249m'
-  _W_DIM=$'\033[2m'
-  _W_NL=$'\n'
-  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ Run /goals${_W_RESET}${_W_DIM} to set today's goals and plan for the day${_W_RESET}${_W_NL}"
 fi
 
 # Continuity-janitor drift surface: one dim line when the detector has cached findings.
 # Reads ONLY the cached JSON (no powershell spawn at startup); the "as of" timestamp makes a
-# stale cache self-evident. Suppressed on the first-session recovery path (/goals owns the CTA there).
+# stale cache self-evident. Suppressed on the first-session recovery path (/today owns the CTA there).
 DRIFT_JSON="$CLAUDE_DIR/janitor/drift-latest.json"
 if [ -f "$DRIFT_JSON" ] && ! { [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ]; }; then
   DRIFT_TOTAL=$(grep -o '"total"[^0-9]*[0-9]\+' "$DRIFT_JSON" | head -1 | grep -o '[0-9]\+$')
   if [ -n "$DRIFT_TOTAL" ] && [ "$DRIFT_TOTAL" -gt 0 ] 2>/dev/null; then
     DRIFT_WHEN=$(grep -o '"generated"[^"]*"[^"]*"' "$DRIFT_JSON" | head -1 | sed 's/.*"\([0-9T:-]*\)".*/\1/' | sed 's/T/ /; s/:[0-9][0-9]$//')
     _D_RESET=$'\033[0m'; _D_DIM=$'\033[2m'; _D_NL=$'\n'
-    BANNER_CONTENT="${BANNER_CONTENT}${_D_NL}  ${_D_DIM}─ ${DRIFT_TOTAL} continuity drift items (as of ${DRIFT_WHEN}) - run /janitor${_D_RESET}${_D_NL}"
+    BANNER_CONTENT="${BANNER_CONTENT}${_D_NL}  ${_D_DIM}─ ${DRIFT_TOTAL} continuity drift items (as of ${DRIFT_WHEN}) - run /reconcile${_D_RESET}${_D_NL}"
   fi
+fi
+
+# Owed-items surface: one dim line when owed-items.md carries open cross-thread loose ends.
+# Cached-file read only (no spawn); same recovery-path suppression as the drift line above.
+OWED_FILE="$CLAUDE_DIR/owed-items.md"
+if [ -f "$OWED_FILE" ] && ! { [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" != "1" ]; }; then
+  OWED_OPEN=$(grep -c '^- \[ \]' "$OWED_FILE" 2>/dev/null || true)
+  if [ -n "$OWED_OPEN" ] && [ "$OWED_OPEN" -gt 0 ] 2>/dev/null; then
+    _O_RESET=$'\033[0m'; _O_DIM=$'\033[2m'; _O_NL=$'\n'
+    BANNER_CONTENT="${BANNER_CONTENT}${_O_NL}  ${_O_DIM}─ ${OWED_OPEN} owed loose end(s) - see owed-items.md or the /goals board${_O_RESET}${_O_NL}"
+  fi
+fi
+
+# Usage-guide pointer: one dim line, ALWAYS shown when the installed guide exists
+# (~/.claude/guide/ is the stable copy install.ps1 drops). The guide kept going
+# unused because nothing surfaced its path; this is its standing home, alongside
+# a /kit reminder (the in-session way to ask the same questions).
+GUIDE_INDEX="$CLAUDE_DIR/guide/index.html"
+if [ -f "$GUIDE_INDEX" ]; then
+  _G_RESET=$'\033[0m'; _G_DIM=$'\033[2m'; _G_ACCENT=$'\033[38;2;124;130;174m'; _G_NL=$'\n'
+  BANNER_CONTENT="${BANNER_CONTENT}${_G_NL}  ${_G_DIM}─ guide: ${_G_RESET}${_G_ACCENT}~/.claude/guide/index.html${_G_RESET}${_G_DIM} (browser, no session) · or ask ${_G_RESET}${_G_ACCENT}/kit${_G_RESET}${_G_NL}"
+fi
+
+# Day-plan call to action. The recap above shows where you left off; the day's plan is
+# yours to set, so nudge /today (the DAY door since the 2026-07-31 two-door split).
+# Appending to BANNER_CONTENT also forces the systemMessage branch below even with no
+# threads, so the nudge still shows on a thread-less session. Suppressed for a fresh
+# recipient (FRESH_USER) -- they get the /tutorial nudge, not a /today prompt with no context yet.
+# EVERY session, not just the first of the day (the FIRST_SESSION_TODAY gate was dropped
+# 2026-08-06).
+# LAST in the banner by design: it is the only accent-bright line down here, so it sits
+# below the dim drift/owed/guide lines rather than outshining them from above.
+# One bare `/today` verb, not a store-resolved show/set split (2026-08-06): the skill routes
+# see-vs-set itself, so the banner does not need to guess.
+if [ "$FRESH_USER" != "1" ]; then
+  _W_RESET=$'\033[0m'
+  _W_ACCENT=$'\033[38;2;177;185;249m'
+  _W_DIM=$'\033[2m'
+  _W_NL=$'\n'
+  BANNER_CONTENT="${BANNER_CONTENT}${_W_NL}  ${_W_ACCENT}▶ /today${_W_RESET}${_W_DIM} to see/set the day's tasks (generalized goals: /goals)${_W_RESET}${_W_NL}"
 fi
 
 # Normal-path marker write: the recap banner was rendered by this hook directly (no
@@ -502,6 +605,22 @@ fi
 # bash reader requires that).
 if [ "$FIRST_SESSION_TODAY" = "1" ] && [ "$RECAP_IS_FRESH" = "1" ]; then
   printf '%s' "$TODAY" > "$ORIENT_MARKER"
+fi
+
+# Run-from line: lead the banner with where this Claude Code process is running
+# from. Leads with a printable "─ " (see the printable-lead rule above). The
+# statusline's "current repo" now shows where work is actively happening, so
+# this is the launch location's single home.
+_R_RESET=$'\033[0m'; _R_DIM=$'\033[2m'; _R_MAGENTA=$'\033[1;35m'; _R_NL=$'\n'
+BANNER_CONTENT="─ ${_R_DIM}repo (running from):${_R_RESET} ${_R_MAGENTA}${LAUNCH_LABEL}${_R_RESET}${_R_NL}${_R_NL}${BANNER_CONTENT}"
+
+# Per-session run-from state for hooks/run-from-watch.sh (line 1 = key path,
+# line 2 = display label). Old sessions' files are swept after 7 days.
+SESSION_ID="$(printf '%s' "$PAYLOAD" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+if [ -n "$SESSION_ID" ]; then
+  mkdir -p "$CLAUDE_DIR/.run-from"
+  printf '%s\n%s' "$LAUNCH_KEY" "$LAUNCH_LABEL" > "$CLAUDE_DIR/.run-from/$SESSION_ID"
+  find "$CLAUDE_DIR/.run-from" -type f -mtime +7 -delete 2>/dev/null || true
 fi
 
 # Emit JSON — systemMessage shows the thread table in chat at session start;

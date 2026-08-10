@@ -1,31 +1,34 @@
 # Mode: manage (set | link | done)
 
-Also read `reference.md` (file format, store layout, guardrails). Three small store edits:
+Also read `reference.md` (store layout, area format, guardrails). Three small store edits, all
+against the single file `~/.claude/goals/goals.md`:
 
 ## set `<id>` — direct edit, no interview
-Resolve the goal by `id` (fuzzy-match the title if needed). Apply the change via a targeted edit or a
-single clarifying prompt. Bump `last_touched`. **Lifecycle:** if the change sets `status` to `done`
-or `abandoned`, move `active/<id>.md` → `done/<id>.md`; if back to `active`/`paused`, keep/return it
-to `active/`.
+Resolve the area by its `id:` metadata line (fuzzy-match the heading if needed). Apply the change
+via a targeted edit or a single clarifying prompt (prio, review_after, north-star, task add/reword,
+live_progress/thread lines). **Lifecycle:** retiring an area (done/abandoned) = CUT its whole `## `
+section out of `goals.md` and write it to `done/<id>.md` (add a one-line header noting the retire
+date + reason); reviving one = paste the section back. Clean the area's `links.tsv` rows only on
+abandon (a done area's edges stay meaningful history).
 
-## link `<goal-id> <thread-slug> [relevance]` — junction edge management
-Add or edit a row in `links.tsv`: `goal-id <TAB> thread-slug <TAB> relevance` (TAB-separated; default
-relevance `supporting`). Validate the goal exists (`active/` or `done/`) and the thread exists
-(`~/.claude/threads/active/` or `/done/`). One edge per goal-thread pair — if the pair already
-exists, update its relevance in place rather than appending a duplicate row. Query either direction by
-reading the file (goal→threads or thread→goals).
+## link `<area-id> <thread-slug> [relevance]` — junction edge management
+Add or edit a row in `links.tsv`: `area-id <TAB> thread-slug <TAB> relevance` (TAB-separated;
+default relevance `supporting`). Validate the area exists (a `goals.md` `id:` line, or `done/`) and
+the thread exists (`~/.claude/threads/active/` or `/done/`). One edge per pair — if it already
+exists, update its relevance in place rather than appending a duplicate. Query either direction by
+reading the file. Also mirror the edge onto the area's `thread:` line in `goals.md` (display
+convenience; `links.tsv` stays the store of record).
 
-## done `[<id>]` — check off horizon items
-**With `<id>`:** resolve that goal, show its unchecked `### Daily`/`### Weekly` items; the user picks
-which are complete.
+## done `[<id>]` — check off tasks
+**With `<id>`:** resolve that area, show its unchecked tasks; the user picks which are complete.
 
-**Without an id (bare `/goals done`):** run an interactive sweep across ALL active goals (do NOT
-error or ask for an id). Read every active goal's unchecked `### Daily`/`### Weekly` items, then
-present them through the `AskUserQuestion` multiSelect checkbox prompt — one option per item, labeled
-`[goal-id] <item>` — exactly like `/log done`'s tick flow. Batch across calls when the item count
-exceeds the ≤4-options / ≤4-questions caps; never silently truncate. If the user ticks nothing, change
-nothing.
+**Without an id (bare `/goals done`):** run an interactive sweep across ALL areas (do NOT error or
+ask for an id). Collect every area's unchecked tasks, then present them through the
+`AskUserQuestion` multiSelect checkbox prompt — one option per task, labeled `[area-id] <task>` —
+exactly like `/log done`'s tick flow. Batch across calls when the count exceeds the ≤4-options /
+≤4-questions caps; never silently truncate. If the user ticks nothing, change nothing.
 
-For each ticked item: flip `- [ ]` → `- [x]` in its goal file and bump that goal's `last_touched`.
-(Mirrors `/log done`'s tick mechanic but operates on goal horizon checklists — no coupling to `/log`.)
-Completing the *whole goal* is a `set` status change, not this.
+For each ticked task: flip `- [ ]` → `- [x]` in `goals.md`. If the task appears in today's tracker
+plan (check `~/.claude/accountability/today-goalmap.tsv`), also tick the tracker item and refresh
+the OneNote mirror (`modes/today.md` steps 4–5) so the three surfaces stay in step. Retiring a
+*whole area* is a `set` lifecycle change, not this.

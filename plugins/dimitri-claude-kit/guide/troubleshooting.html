@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fixing things — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--day)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; Fixing things</p>
+  <div class="mast">
+    <h1 style="color:var(--day)">⚠ Fixing things</h1>
+    <p class="sub">Organised by <b>what you noticed</b>, not by what caused it — you know the symptom,
+    that is the whole point. Each one names the likely cause and what to actually do.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html" class="here">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>Two things to try first <span>They fix a surprising share of it.</span></h2>
+  <div class="lostcol">
+    <h3>Restart Claude Code</h3>
+    <ul><li>Skills, hooks, and settings load at startup. Anything installed or edited mid-session is not live yet.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Check you ran the installer</h3>
+    <ul><li>A plugin cannot deliver the statusline, user settings, or the scaffold. Without <code>install.ps1</code> those are simply absent.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Still stuck?</h3>
+    <ul><li>Ask Claude <code>/kit</code> and describe it. For Claude Code itself rather than this kit, use its own <code>/help</code>.</li></ul>
+  </div>
+</div>
+
+<div class="entry" id="command-nothing">
+  <h3>I typed a command and nothing happened</h3>
+  <p class="lede">Almost always: the skill is not loaded yet, or the name is not what you think.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>Check, in order</h4>
+      <p><b>1.</b> Restart Claude Code. A freshly installed or edited skill is not live until then.<br>
+      <b>2.</b> Confirm the name against <a href="index.html">the overview</a> — it lists every command
+      that ships.<br>
+      <b>3.</b> Try <code>/kit &lt;what you wanted&gt;</code> and let it route you.</p>
+    </div>
+    <div class="block">
+      <h4>The likely trap</h4>
+      <p>Some things that look like commands are not. <code>/change-review</code> is an always-on
+      format with nothing to run. <code>/eod</code> and <code>/eow</code> exist but Claude will not
+      invoke them for you — you type them yourself.</p>
+    </div>
+  </div>
+</div>
+
+<div class="entry" id="ignored">
+  <h3>Claude ignored my instruction</h3>
+  <p class="lede">If you have corrected the same thing twice, the instruction is missing rather than unclear.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>Where instructions live</h4>
+      <p>Standing preferences belong in <code>CLAUDE.md</code>, which loads every session. Something you
+      said three sessions ago is not remembered — that is what the file is for.</p>
+    </div>
+    <div class="block">
+      <h4>When it is a skill misbehaving</h4>
+      <p>If a specific command did the wrong thing, fired when it should not have, or missed a case, run
+      <code>/skill-builder</code> and describe what happened. It revises the skill so the fix holds next
+      time, instead of just apologising this time.</p>
+    </div>
+  </div>
+</div>
+
+<div class="entry" id="banner-empty">
+  <h3>The startup banner is empty</h3>
+  <p class="lede">Expected on a fresh setup. A real defect if you have threads.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>If you are new</h4>
+      <p>Correct behaviour — you have no threads. Run <code>/log new "my-first-thread"</code> and it
+      fills in immediately.</p>
+    </div>
+    <div class="block">
+      <h4>If you have threads</h4>
+      <p>The banner reads <code>threads/INDEX.md</code>, not the thread files. An empty banner with real
+      threads means the index is missing or out of sync. <code>/reconcile sync</code> regenerates it —
+      the index is derived, so this is always safe.</p>
+      <p>If the banner never appears at all, the hook is not running: check that Git Bash is installed,
+      since the hooks need it.</p>
+    </div>
+  </div>
+</div>
+
+<div class="entry" id="tick-lost">
+  <h3>I checked something off and it came back</h3>
+  <p class="lede">The two stores are deliberately separate, and a tick in one is not automatically a tick in the other.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>The usual cause</h4>
+      <p>You finished a <b>slice</b>, not the whole task. Ticking a day item only closes the underlying
+      area task when it finishes that task outright — otherwise the parent stays open on purpose.</p>
+    </div>
+    <div class="block">
+      <h4>The other cause</h4>
+      <p>The plan was restructured after you ticked. Item numbers are positional, so a rebuild can move
+      what you ticked. Always tick against the freshly rendered list.</p>
+      <p>To true everything up at once: <code>/reconcile status</code>.</p>
+    </div>
+  </div>
+</div>
+
+<div class="entry" id="theme-stuck">
+  <h3>The theme options will not expand</h3>
+  <p class="lede">A PowerShell terminal quirk, not a kit problem.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>The fix</h4>
+      <p>Click into the command line — the options list — to reveal the choices. They do not expand on
+      their own in PowerShell.</p>
+    </div>
+    <div class="block">
+      <h4>If the theme changes nothing</h4>
+      <p>The integrated colours only take effect with the matching base theme selected.
+      <code>/theme</code> sets that for you on first use; if you had already set a base theme, it keeps
+      yours rather than overriding it.</p>
+    </div>
+  </div>
+</div>
+
+<div class="entry" id="eod-missing">
+  <h3>The day summary never ran</h3>
+  <p class="lede">By design: Claude cannot start it. Either you type it, or a scheduler does.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>Right now</h4>
+      <p>Type <code>/eod</code>. Asking Claude to "wrap up my day" will not reach it — that restriction
+      is deliberate, since a day summary costs real tokens and should be your call.</p>
+    </div>
+    <div class="block">
+      <h4>Every day, automatically</h4>
+      <p>Run <code>bootstrap\scripts\setup-eod-schedule.ps1</code> once. It installs an afternoon and an
+      evening pass. A scheduler is not the model, so it is allowed to.</p>
+      <p><code>/eow</code> has no shipped scheduler — that one only happens when you type it.</p>
+    </div>
+  </div>
+</div>
+
+<div class="entry" id="drift">
+  <h3>It says my records drifted and I do not know what that means</h3>
+  <p class="lede">Two of your files disagree with each other. Nothing is lost, and nothing has been changed without you.</p>
+  <div class="cols">
+    <div class="block">
+      <h4>What to do</h4>
+      <p>Run <code>/reconcile sync</code>. It lists what it found in plain language, fixes the derived
+      things itself, and asks before touching anything you wrote.</p>
+    </div>
+    <div class="block">
+      <h4>What it usually is</h4>
+      <p>Harmless bookkeeping: a dashboard row dated behind its thread, a memory file with no index
+      pointer, an auto-capture nobody confirmed. Not data loss.</p>
+    </div>
+    <div class="block">
+      <h4>Not the same as clutter</h4>
+      <p>Drift is records disagreeing. Stale <i>files</i> — dead plans, old drafts — are
+      <code>/deepclean</code>'s job, and it proposes before deleting anything.</p>
+    </div>
+  </div>
+</div>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.10 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Documentation — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--docs)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; Documentation</p>
+  <div class="mast">
+    <h1 style="color:var(--docs)">■ Documentation</h1>
+    <p class="sub">Generate docs from the <b>code as it actually is</b>, not from what the names
+    suggest. Two commands, and you pick between them purely by how much you are pointing at: one
+    thing, or a group of things.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html" class="here">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>Pick by scope <span>The only question that matters here.</span></h2>
+  <div class="lostcol">
+    <h3>One thing</h3>
+    <ul><li><b>/document-process</b> — a single project, service, or process.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Many things</h3>
+    <ul><li><b>/document-section</b> — a folder, a category, or the whole codebase.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Neither</h3>
+    <ul><li>A unified system-level overview is a different job again, and is not part of the shipped kit.</li></ul>
+  </div>
+</div>
+
+<!-- =================== /document-process =================== -->
+<article class="entry" id="document-process">
+  <h3>/document-process</h3>
+  <p class="lede f-lede">Produce a README-style document for one existing project, service, or process.</p>
+
+  <dl class="ex f-forms"><dt>/document-process</dt><dd>Point it at one project, service, or process. No flags.</dd></dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What it does</h4>
+      <p>Reads the actual code and writes what the thing does, how it is wired, what it depends on,
+      and how to run it. Because it sources from the code, it catches the cases where a component's
+      name stopped matching its behaviour three refactors ago.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Reach for it when</h4>
+      <p>Someone needs to understand a component you own. Also good before a handoff, and good on
+      something <i>you</i> wrote a year ago and no longer remember.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">Not for</h4>
+      <p>Several projects at once — use <code>/document-section</code>, which orchestrates this one
+      rather than making you repeat yourself. Also not for a cross-system overview.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>It reads the code, so it catches the case where a component's name stopped matching its behaviour several refactors ago. That mismatch is often the most useful thing in the output.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- =================== /document-section =================== -->
+<article class="entry" id="document-section">
+  <h3>/document-section</h3>
+  <p class="lede f-lede">Document a defined <b>section</b> — a set of projects, a category, a directory, or everything.</p>
+
+  <dl class="ex f-forms">
+    <dt>a category</dt><dd>"document all the AzFn services"</dd>
+    <dt>a directory</dt><dd>Point it at a folder and it works through what's inside.</dd>
+    <dt>everything</dt><dd>The whole codebase, in waves.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">How it works</h4>
+      <p>It orchestrates <code>/document-process</code> across each target rather than reimplementing
+      it, so a single project and a group of forty produce consistent output.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Expect it to be big</h4>
+      <p>Pointing it at a large codebase is a real amount of work and a real amount of tokens. Scope
+      it to a category first and see whether the output is what you wanted before going wider.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>Coverage is tracked, so a later run can drain what has drifted rather than regenerating
+      everything from scratch.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for one project — that is <code>/document-process</code>, which this orchestrates. Not for a unified cross-system overview; the kit ships no command for that.</p>
+    </div>
+
+  </div>
+</article>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.10 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

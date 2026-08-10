@@ -98,7 +98,33 @@ JSONL files can be large. Read them and focus extraction on tool results and ass
 
 Produce a unified daily handoff. Work section by section:
 
-**Projects touched today** — one line per project: what category of work happened (new feature, debugging, documentation, Q&A, etc.).
+**What moved today** — the lead section (replaces the old flat "Projects touched" roster). Group
+every work item by progress state, in this fixed order: `SHIPPED / DONE`, `ADVANCED`, `STARTED`,
+`STALLED / BLOCKED`. Omit any group with no items. Within each group, order items by impact,
+highest first. Each item is a project-tagged topic line carrying three trailing metrics, with its
+one-line detail nested beneath:
+
+```
+  SHIPPED / DONE
+      <item>    [<impact>: <why>]   ~<active-time> · <n> sent
+          <one-line detail>
+```
+
+The three metrics, each with its own honesty constraint:
+- **Impact** is a *relative* rank of today's items against each other, not an absolute verdict, and
+  always carries a short why-clause so the tag shows its reasoning (`[high: unblocked live email]`).
+  This is a judgment call, not a measured field. Keep it glanceably overrulable. On a slow day
+  nothing has to be "high".
+- **Active time** is the sum of gaps between consecutive message timestamps in the session(s) behind
+  the item, discarding any gap over 15 min as idle (away-from-keyboard) so the figure reads as active
+  span, not raw wall-clock. Prefix `~` to mark it approximate. Attribution rides on the project you
+  assign each session to during synthesis, NOT the `projects/` folder hash: that folder collapses
+  every config/tooling session into one generic dir and cannot separate (for example) Bloomberg from
+  the export kit. Split a genuinely two-project session by judgment. If a session yields no usable
+  timestamps, omit the time rather than inventing one. (See the metric-computation gotcha below for
+  the record-parsing details.)
+- **Sent messages** counts only genuinely-typed user prompts. EXCLUDE tool-result records: they are
+  logged as user-role entries but are plumbing, not something the user sent. Render as `<n> sent`.
 
 **Key decisions** — design choices made, approaches selected, things ruled out. Tag each with its project. A decision with a rationale is more valuable than one without.
 
@@ -124,8 +150,23 @@ Structure:
 > Sources: N thread entries, N auto-logs, N JSOLs synthesized.
 > Sessions with no recoverable context: [none | list]
 
-## Projects touched today
-- <ProjectName> — <one-line summary>
+## What moved today
+
+### SHIPPED / DONE
+- <item> [<impact>: <why>]  ~<active-time> · <n> sent
+  <one-line detail>
+
+### ADVANCED
+- <item> [<impact>: <why>]  ~<active-time> · <n> sent
+  <one-line detail>
+
+### STARTED
+- <item> [<impact>: <why>]  ~<active-time> · <n> sent
+  <one-line detail>
+
+### STALLED / BLOCKED
+- <item> [<impact>: <why>]  ~<active-time> · <n> sent
+  <one-line detail>
 
 ## Key decisions
 - <decision> [<ProjectName>]
@@ -148,16 +189,26 @@ inside a single fenced code block so it renders as one selectable, copy-paste-re
 Do **NOT** echo the raw markdown. Dimitri pastes this into OneNote, which renders no markdown and
 drops/mangles non-ASCII glyphs. Instead emit an **ASCII-only, indented-outline** rendering of the
 same content:
-- **ASCII only** — replace `—`->`-`, `→`->`->`, `©`->`(c)`, `×`->`x`, smart quotes->straight quotes,
-  and any other non-ASCII glyph with a plain equivalent.
+- **ASCII only** — replace `—`->`-`, `→`->`->`, `©`->`(c)`, `×`->`x`, `·`->`|`, smart quotes->straight
+  quotes, and any other non-ASCII glyph with a plain equivalent.
 - **No markdown markup** — no `#`, `**`, backticks, or `>`. Section titles are plain lines at the
   left margin; items indented 4 spaces; sub-detail indented 8. No `-`/`*` bullets (leading
   whitespace lets OneNote apply its own outline levels on paste). The one exception is the numbered
   Tomorrow's-priorities list, where a plain `1.` `2.` is fine.
 - **Every entry is a node, not a paragraph** — each list item (Key decisions and
-  Work-still-in-progress included, not just Projects) is a short topic line at the 4-space indent
-  with its explanation nested as sub-detail at 8. Never emit a multi-line entry flat at a single
-  indent — adjacent entries then merge into one unreadable block.
+  Work-still-in-progress included, not just the What-moved items) is a short topic line at the
+  4-space indent with its explanation nested as sub-detail at 8. Never emit a multi-line entry flat
+  at a single indent — adjacent entries then merge into one unreadable block.
+- **What-moved groups are an intermediate level, with deliberate spacing** — the progress-group
+  headers (`SHIPPED / DONE`, `ADVANCED`, `STARTED`, `STALLED / BLOCKED`) sit one level below the
+  `What moved today` section title and one above their items, so items indent a further step under
+  their group. A group header **hugs its first item** (no blank line after the header); put **one
+  blank line between item nodes** within a group so adjacent entries never merge.
+- **Align the metric block** — keep the impact tag and metrics on the item's topic line, ordered
+  `<item> [impact: why]   <metrics>`, where `<metrics>` is `~time | N sent` (or `(time n/a)`).
+  Right-pad the `item [impact: why]` prefix so the metric block begins at a **consistent column**
+  across every item in the report; if a prefix overruns that column, fall back to a single space
+  before the metrics. This is what makes the times and counts scannable down a straight edge.
 - **Keep the fence** — it is the terminal-selection mechanism; only the content inside changes.
 
 This is a console echo, not a file write — it does not violate the single-write guardrail. Note the
@@ -218,6 +269,25 @@ Tell the user:
 - On Windows, JSONL files are at `%USERPROFILE%\.claude\projects\<hash>\<session-id>.jsonl`. The hash encodes the project path with `\` and `:` replaced by `-`.
 - **Windows JSONL parsing: use PowerShell, not a scripting CLI.** `jq` and `node` are not installed, and `python`/`python3`/`py` all resolve to broken Windows Store stubs. The durable, dependency-free path is PowerShell `Get-Content file | ForEach-Object { $_ | ConvertFrom-Json }` (5.1 is always present, no version to go stale). Only if you genuinely need Python, discover the real interpreter by glob rather than hardcoding a version — `Get-ChildItem "$env:LOCALAPPDATA\Programs\Python\Python*\python.exe"` — because bare `python` is the stub. If you do write a Python helper, put it in a temp `.py` file with raw strings and run that; do not embed Windows paths in a bash heredoc, where backslashes mangle into bad escape sequences.
 - Subagent transcripts live under `<session-id>/subagents/agent-*.jsonl`. They are spawned by a parent session, not independent sessions — count the parent `<session-id>.jsonl` files for the real session tally, not the subagent files.
+- **What-moved metric computation (validated 2026-07-13).** Two figures come off the JSONL records:
+  - *Active time*: parse the `"timestamp":"...Z"` on each record, sort, sum consecutive gaps but
+    discard any gap over 15 min (idle). Raw span badly overstates effort — a validation session
+    showed 96 min raw vs 24 min active — so the cap is load-bearing, not cosmetic. Timestamps are
+    UTC; the user is US Eastern. Per-item active time is a per-task effort proxy, NOT a workday
+    total: the user runs concurrent sessions (three overlapped mid-afternoon on 2026-07-13), so
+    summing the per-item figures can exceed real elapsed time. Present the numbers per item; do not
+    total them.
+  - *Sent messages*: count records whose message `role` is `user`, then SUBTRACT the `tool_result`
+    records (also logged role `user`). Do NOT use the raw `user`-record count or the `"timestamp"`
+    occurrence count — both are inflated several-fold by tool plumbing (one typed prompt can spawn
+    15+ records: your text, my thinking/text/tool-use blocks, and a tool-result per call).
+  - *Attribution limit*: the `projects/` folder hash does NOT identify the EOD's project buckets.
+    All config/tooling sessions collapse into `C--Users-<you>` / `C--Users-<you>--claude`, and
+    resumed sessions carry content from many days (one validation file spanned 07-01..07-24), so
+    folder mtime is not "that day's work" either. Attribute each session to a project by reading its
+    content during synthesis (already done for the prose), and attach the metrics to that assignment.
+  - On Windows, parse with PowerShell `ConvertFrom-Json` per the JSONL gotcha above; `jq`/`node` are
+    absent.
 
 ---
 

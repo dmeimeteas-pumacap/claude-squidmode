@@ -54,8 +54,8 @@ It prints a summary of everything it skipped or kept.
 
 ## Update
 ```
-claude plugin marketplace update dimitri-claude-kit          # refresh the git marketplace checkout
-claude plugin update dimitri-claude-kit@dimitri-claude-kit   # qualified <plugin>@<marketplace> form
+claude plugin marketplace update claude-squidmode            # refresh the git marketplace checkout
+claude plugin update dimitri-claude-kit@claude-squidmode     # qualified <plugin>@<marketplace> form
 git config --global --add safe.directory <clone-path>        # only if the pull hits dubious-ownership
 git -C <clone-path> pull                                     # get install.ps1 for the new version
 powershell -NoProfile -ExecutionPolicy Bypass -File .\bootstrap\install.ps1 -NonInteractive
@@ -89,3 +89,12 @@ install recorded everything:
 
 The backup restores what was overwritten; the receipt reverses what was added. Together they make the
 removal complete and version-independent.
+
+## The usage guide (no Claude session needed)
+
+After installing, open **`~/.claude/guide/index.html`** in a browser. It is the full reference for
+every command the kit ships, plus what runs automatically, where files live, and how to fix common
+problems. Nine pages, works offline, nothing to run.
+
+In a conversation, `/kit` answers the same content interactively -- name a command, a topic, or just
+what you are trying to do. (`/help` remains Claude Code's own; the kit does not take it over.)

@@ -84,3 +84,12 @@ regenerates the shippable trees from your live `~/.claude`, and runs the allowli
 The six original open decisions are all resolved (v1 locked 2026-06-29). Full design rationale,
 the merge-safe invariant, and the resolved decisions live in the author's plan file referenced from
 the build; per-feature behavior is documented in **GUIDE.md**.
+
+## The usage guide (no Claude session needed)
+
+After installing, open **`~/.claude/guide/index.html`** in a browser. It is the full reference for
+every command the kit ships, plus what runs automatically, where files live, and how to fix common
+problems. Nine pages, works offline, nothing to run.
+
+In a conversation, `/kit` answers the same content interactively -- name a command, a topic, or just
+what you are trying to do. (`/help` remains Claude Code's own; the kit does not take it over.)

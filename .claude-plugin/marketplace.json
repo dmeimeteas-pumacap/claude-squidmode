@@ -7,7 +7,7 @@
     {
       "name": "dimitri-claude-kit",
       "source": "./plugins/dimitri-claude-kit",
-      "description": "Continuity + productivity setup: thread logging (/log, /catchup), goals/morning/eod orientation, doc-generation, skill-builder, and supporting hooks. Windows-oriented."
+      "description": "Continuity + productivity setup for Claude Code: thread-based logging and catchup, the two-door planning model (goals areas + today day-plan), day synthesis (eod), continuity janitor (reconcile/deepclean), documentation generators, and skill-builder."
     }
   ]
 }

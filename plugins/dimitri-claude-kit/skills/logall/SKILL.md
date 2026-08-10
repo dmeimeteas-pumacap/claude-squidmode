@@ -1,6 +1,6 @@
 ---
 name: logall
-description: "Find all sessions where /log was never called and walk through them interactively one at a time, synthesizing each into a thread log entry. Use when the user says '/logall', 'log all sessions', 'catch up on unlogged sessions', or 'log everything I missed'. '/logall eod' runs the end-of-day wrap: sweep TODAY's unlogged sessions interactively, then chain into /eod for a copy-friendly daily summary."
+description: "Find all sessions not yet individually logged and walk through them interactively one at a time, synthesizing each into thread log entries (a session may update MORE THAN ONE thread). Tracking is per session UUID, not per (project,date), so concurrent same-day threads can't mask each other. Use when the user says '/logall', 'log all sessions', 'catch up on unlogged sessions', or 'log everything I missed'. '/logall eod' runs the end-of-day wrap: sweep TODAY's unlogged sessions interactively, then chain into /eod for a copy-friendly daily summary."
 user-invocable: true
 argument-hint: "[eod] [--since YYYY-MM-DD] [--recheck]"
 ---
@@ -36,75 +36,107 @@ finds nothing, but it is wasted work and confusing). One sweep, owned by `/eod`.
 Net result of `/logall eod` (unchanged for the user): every impactful session from today is durably
 in its thread, and a fresh, copy-ready EOD summary is on screen.
 
+## Granularity: track per SESSION, not per (project, date)
+
+**This is the load-bearing design rule.** A candidate and its logged/reviewed state are keyed by
+the **session UUID** (the JSONL filename without extension), never by `(project, date)`. The old
+`(project, date)` key was the source of a silent data-loss bug: you run many concurrent threads per
+project (TheSquid routinely has 5-7 active threads), so a single logged entry in one thread marked
+the whole `(project, date)` day as "logged" and every sibling thread's session that day was
+subtracted as already-covered and never surfaced. Session-UUID keying makes sibling threads
+impossible to mask — each session must be handled on its own before it drops off the list.
+
+A single session can also touch **more than one thread** (e.g. a docs session that advances both the
+knowledge-system and the visualization threads). The write step therefore fans out to **every**
+thread the session touched, not one inferred thread. See *Write*.
+
 ## Discovery phase
 
 Run the following shell commands via bash (Git Bash at
 `C:\Program Files\Git\usr\bin\bash.exe`) to collect candidates. Use the same SCRIPT_DIR trick
 as the hooks to derive `CLAUDE_DIR` if `$HOME` resolves incorrectly.
 
-### Step 1 — collect JSONL sessions
+### Step 1 — collect JSONL sessions (one candidate per session UUID)
 
 ```bash
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="$(cd "$HOOK_DIR/../.." && pwd)"   # ~/.claude
 PROJECTS_DIR="$CLAUDE_DIR/projects"
 
-# List all jsonl files with their modification date (YYYY-MM-DD) and parent folder name
-find "$PROJECTS_DIR" -name "*.jsonl" -printf "%TY-%Tm-%Td\t%h\t%f\n" 2>/dev/null | sort
+# session_id (filename stem) TAB date TAB folder_path
+# -mindepth/-maxdepth 2: TRUE session files sit directly in a project hash folder.
+# ! -name 'agent-*': exclude subagent transcripts, which live in <session>/subagents/
+#   and are NOT user sessions (they would flood + mis-key discovery otherwise).
+find "$PROJECTS_DIR" -mindepth 2 -maxdepth 2 -name "*.jsonl" ! -name "agent-*" \
+  -printf "%f\t%TY-%Tm-%Td\t%h\n" 2>/dev/null | sort
 ```
 
-Each row: `date TAB folder_path TAB filename`
+Each JSONL file is ONE candidate session, identified by its filename stem (the session UUID).
+Decode the parent folder name to a `project_name` exactly as before: strip the `PROJECTS_DIR`
+prefix; the project is the last meaningful segment of the `-`-decoded path (`C--Users-foo-source-repos-TheSquid`
+→ `TheSquid`); folders ending in only system dirs (`source-repos`, `repos`) → `general`. Carry
+`(session_id, project_name, date, path)` for each candidate. Do **not** group by `(project, date)`.
 
-The folder name under `projects/` encodes the project path: each `-` in the encoded name is a
-path separator or colon. Decode to get the project basename:
-- Strip the `PROJECTS_DIR` prefix to get the hash folder name.
-- The project name is the last segment of the decoded path (split on `-`, take the last meaningful
-  part). For `C--Users-foo-source-repos-TheSquid` the project name is `TheSquid`; for
-  `C--Users-foo-source-repos` (no trailing segment) the project name is `source-repos` or `repos`.
-- If the folder name ends with only system dirs (`source-repos`, `repos`, or similar non-project
-  names), treat the project as `general`.
+### Step 0 (first run only) — migrate legacy coverage into the processed ledger
 
-Group JSONL files by `(project_name, date)`. Each unique pair is a candidate session.
+If `~/.claude/threads/.logall-processed.tsv` does **not** exist, seed it once so the switch to
+session-level tracking does not re-surface months of already-captured history:
 
-### Step 2 — collect logged (project, date) pairs
+- Read every `.md` under `threads/active/` and `threads/done/`; collect the set of `(project, date)`
+  pairs that have a `### YYYY-MM-DD` heading under `## Log` (the old "logged" signal).
+- For every candidate session **strictly before today** whose `(project, date)` is in that set,
+  write a processed-ledger row (disposition `logged-migrated`, see Step 2 format).
+- Do NOT seed today's sessions — today is where precise per-session capture must start.
 
-Read every `.md` file under `~/.claude/threads/active/` and `~/.claude/threads/done/`. For each
-file, extract:
-- `project:` from the frontmatter
-- Every `### YYYY-MM-DD` heading under `## Log`
+This migration deliberately inherits the old coarse `(project, date)` signal for **history only**
+(we are not retro-splitting past multi-thread days); everything from today forward is session-precise.
+Tell the user how many rows were seeded.
 
-Build a set of `(project, date)` pairs that are already logged. A session is **logged** if its
-`(project_name, date)` matches any pair in this set.
+### Step 2 — subtract already-processed sessions (by UUID)
 
-### Step 2b — collect already-reviewed (skipped) pairs
+Read the **processed ledger** `~/.claude/threads/.logall-processed.tsv` (tab-separated; may be
+absent → empty). One row per handled session:
 
-Read the **reviewed ledger** at `~/.claude/threads/.logall-reviewed.tsv` (tab-separated, one row
-per pair: `project⇥date⇥reviewed_on⇥reason⇥disposition`; the 5th field is optional and defaults to
-`review`; may not exist yet — treat absence as empty). Rows are `(project, date)` pairs a prior
-`/logall` run already inspected and the user judged not worth logging. Build two sets:
-- **`reviewed`** — rows with `disposition` = `review` (or absent). Suppressed normally; `--recheck`
-  brings them back (a previously-skipped chat may now fit a thread that did not exist before).
-- **`permanent`** — rows with `disposition` = `permanent`. **Never** re-surfaced, even under
-  `--recheck`. Use this for chats that will never belong anywhere but that you don't want to delete.
+```
+session_id ⇥ project ⇥ session_date ⇥ processed_on ⇥ disposition ⇥ threads_written
+```
 
-Physically **deleted** sessions need no ledger row — a removed JSONL is no longer a candidate.
+`disposition` ∈ { `logged`, `logged-migrated`, `review` (skipped as not-worth-logging),
+`permanent` (never re-surface) }. `threads_written` is a comma-separated slug list (may be empty).
+Build:
+- **`processed`** — rows with disposition `logged` / `logged-migrated` / `review`. Suppressed
+  normally; `--recheck` brings the `review` ones back (not `logged*`).
+- **`permanent`** — never re-surfaced, even under `--recheck`.
+
+Physically **deleted** sessions need no row — a removed JSONL is no longer a candidate.
+
+### Step 2b — honor the legacy (project, date) reviewed ledger
+
+Also read the old `~/.claude/threads/.logall-reviewed.tsv` (`project⇥date⇥reviewed_on⇥reason⇥disposition`,
+5th field defaults to `review`; may be absent). Its rows are legacy `(project, date)` review/permanent
+decisions. Suppress any candidate whose `(project, date)` matches a `review` row (unless `--recheck`)
+or a `permanent` row (always). This preserves prior manual skips without re-flooding; new skips are
+written session-level to `.logall-processed.tsv`, not here.
 
 ### Step 3 — compute unlogged sessions
 
-`unlogged = candidates − logged − reviewed − permanent`
+`unlogged = candidates − processed − permanent − legacy_reviewed`
 
-**`--recheck`:** when this flag is passed, do **not** subtract `reviewed` (`unlogged = candidates −
-logged − permanent`). `permanent` rows stay excluded regardless. Use this when threads have changed
-since the last sweep — a previously-skipped chat may now belong to a thread that did not exist at
-review time. Re-surfaced pairs go through the normal interactive flow; if skipped again, their
-ledger `reviewed_on` is refreshed (see the Skip option).
+**`--recheck`:** do not subtract the `review` rows (`.logall-processed.tsv` disposition `review`,
+and legacy `.logall-reviewed.tsv` `review`). `logged*` and `permanent` stay excluded regardless.
 
-Apply `--since` filter if provided (exclude sessions older than that date). Default: look back 30
-days from today.
+Apply `--since` if provided (exclude sessions older than that date). Default: look back 30 days.
 
-Sort unlogged sessions oldest-first. Report the total count before starting.
+Sort unlogged sessions oldest-first. Report the total count before starting. If zero, say so and stop.
 
-If zero unlogged sessions are found, say so and stop.
+### The current (in-progress) session
+
+**Plain `/logall` INCLUDES the running session.** Its JSONL already exists and is a normal candidate;
+a common reason to run `/logall` is precisely to capture the session you are in, so do not exclude it.
+It will be the newest, still-growing file — synthesize from what is there and note it may be
+mid-flight. **Exception: `/logall eod` (and any `--unattended`/`/eod`-driven sweep) EXCLUDES the
+current session**, because `/eod` captures the current session itself in a separate step; including
+it here would double-write. So: exclude-current only on the eod path, include-current everywhere else.
 
 ## Interactive phase
 
@@ -122,7 +154,16 @@ Skip binary-looking content, large data blobs, and repeated boilerplate. If the 
 
 ### Synthesize
 
-Produce a draft log entry in the `/log` format:
+**First determine which thread(s) the session touched.** Match by `project:` to narrow the
+candidate threads, then read each candidate's `## Where I left off` / `topic` / `tags` / slug and
+compare against the session's actual work (files edited, subjects discussed, thread slugs mentioned).
+A session may map to **one, several, or zero** existing threads:
+- **One or several** → produce a **separate, thread-specific** draft entry per touched thread (each
+  entry describes only that thread's slice of the session — do not paste the same generic entry into
+  all of them).
+- **Zero** → offer to create a new thread (never drop the session).
+
+For each touched thread, produce a draft log entry in the `/log` format:
 
 ```
 **Date:** YYYY-MM-DD  **Project:** <name>
@@ -144,12 +185,11 @@ Show the synthesis to the user. Offer three options:
 
 1. **Accept** — write it as-is
 2. **Edit** — user provides corrections, then write
-3. **Skip** — mark as reviewed-and-not-log-worthy and move on. **Record it in the ledger** so it
-   is not re-checked next run: append (or, if a row for this `(project, date)` already exists,
-   replace) a line `project⇥date⇥<today>⇥<one-line reason>⇥review` in
-   `~/.claude/threads/.logall-reviewed.tsv` (create the file if missing). Use `Add-Content` to
-   append; use today's date as `reviewed_on`. Skips done under `--recheck` refresh the existing
-   row's `reviewed_on` rather than adding a duplicate.
+3. **Skip** — mark as reviewed-and-not-log-worthy and move on. **Record it in the processed ledger**
+   (session-level) so it is not re-checked next run: append a line
+   `session_id⇥project⇥session_date⇥<today>⇥review⇥` to `~/.claude/threads/.logall-processed.tsv`
+   (create the file if missing; `Add-Content` to append). If a row for this `session_id` already
+   exists, replace it. Skips done under `--recheck` refresh the existing row's `processed_on`.
 4. **Delete (garbage)** — for sessions with no durable value at all (greeting-only, immediately
    interrupted, throwaway scratch). **Delete the underlying session JSONL file(s)** for the chat.
    Because the file is then gone, it can never be re-examined by any flag, and no ledger row is
@@ -157,8 +197,9 @@ Show the synthesis to the user. Offer three options:
    getting explicit confirmation; delete only files clearly identified as garbage (not a whole
    `(project, date)` group that also holds real work). Deletion is irreversible and also drops the
    chat from `claude --resume` history and `/eod` reconstruction — only use it when that loss is nil.
-5. **Permanently ignore** — never log, but keep the file. Write the ledger row with `disposition`
-   = `permanent` (5th field). These are excluded from every future run, including `--recheck`.
+5. **Permanently ignore** — never log, but keep the file. Write a processed-ledger row
+   `session_id⇥project⇥session_date⇥<today>⇥permanent⇥`. Excluded from every future run, including
+   `--recheck`.
 
 If the user edits, apply their corrections to the draft before writing.
 
@@ -174,22 +215,22 @@ existing thread, create one rather than dropping it — the priority is never lo
 
 ### Write
 
-On accept or edit:
+On accept or edit, apply to **each** touched thread (the set resolved in Synthesize):
 
-1. **Resolve the target thread** — infer from the project name which active thread this belongs
-   to (check `project:` in thread frontmatter). If multiple threads match, ask. If none match,
-   offer to create a new thread or add to an existing one by slug.
+1. **For every touched thread** (not just one):
+   a. **Insert the thread-specific log entry** newest-first, immediately under `## Log` (above the
+      most-recent existing `### ` entry), per the `/log` newest-first rule. If a `### <date>` heading
+      for this date already exists, append below it under the same heading.
+   b. **Overwrite `## Where I left off` and `## Next`** only if this session is that thread's most
+      recent activity (its date ≥ the thread's `last_touched`). An older backfilled session must not
+      clobber a newer thread's pointers — append its Log entry only.
+   c. **Bump `last_touched`** to the session date if newer than the thread's current value.
+   d. **Regenerate the INDEX row** for that thread.
 
-2. **Append the log entry** to that thread's `## Log` section under a `### YYYY-MM-DD` heading.
-   If a heading for that date already exists (e.g. from a partial earlier capture), append below
-   the existing entry under the same heading.
-
-3. **Overwrite `## Where I left off` and `## Next`** only if this session is the most recent one
-   being written (i.e. the last in the batch, or if the date is newer than `last_touched`).
-
-4. **Bump `last_touched`** to the session date if it's newer than the current value.
-
-5. **Regenerate the INDEX row** for the touched thread.
+2. **Record ONE processed-ledger row for the session** (not per thread): append
+   `session_id⇥project⇥session_date⇥<today>⇥logged⇥<slug1,slug2,…>` to
+   `~/.claude/threads/.logall-processed.tsv`, listing every thread written. This is what stops the
+   session from re-surfacing next run.
 
 Then move to the next unlogged session.
 
@@ -202,10 +243,11 @@ were updated. Close with a one-line, non-blocking tip showing the other modes:
 ## Guardrails
 
 - Write only under `~/.claude/threads/` — thread files (`## Log`, `## Where I left off`, `## Next`,
-  `last_touched`) and the reviewed ledger `.logall-reviewed.tsv`. Never edit `## Decisions`
-  retrospectively unless the synthesis explicitly identified a decision made in that session.
-- The reviewed ledger only records the `(project, date)` key, a date, and a short reason — never
-  session content, file contents, or secrets.
+  `last_touched`) and the two ledgers: `.logall-processed.tsv` (session-level, the primary) and the
+  legacy `.logall-reviewed.tsv` (read-only for suppression; do not add new rows to it). Never edit
+  `## Decisions` retrospectively unless the synthesis explicitly identified a decision made in that session.
+- The ledgers record only keys (session UUID / project / date), a date, a disposition, and (for
+  skips) a short reason and the written thread slugs — never session content, file contents, or secrets.
 - Do not fabricate content. If the JSONL is unreadable or empty, say so and offer to skip.
 - Never **edit** a session JSONL file. The only permitted destructive action is **deleting** a
   whole garbage session file under the Delete disposition, and only after the user confirms the
@@ -219,7 +261,12 @@ were updated. Close with a one-line, non-blocking tip showing the other modes:
 - If the JSONL format changes → update the "Read the JSONL" section.
 - If the project-path encoding scheme changes → update the decoding rule in Step 1.
 - If `/log`'s thread format changes → update the synthesis template and write step to match.
-- The reviewed ledger (`.logall-reviewed.tsv`) suppresses re-checking of skipped pairs; `--recheck`
-  bypasses it for `review` rows but not `permanent` rows. Garbage sessions are deleted outright (no
-  ledger row). If the ledger schema or disposition values change, update Step 2b, Step 3, and the
-  interactive options together.
+- **Tracking is per session UUID** (`.logall-processed.tsv`), not per `(project, date)` — this is the
+  fix for concurrent same-day threads masking each other. `/log` also stamps this ledger when it
+  captures the current session (best-effort), so a manual `/log` does not make its session
+  re-surface here. The legacy `.logall-reviewed.tsv` `(project, date)` file is honored read-only for
+  old skips (Step 2b). `--recheck` bypasses `review` rows in both, never `logged*`/`permanent`.
+  Garbage sessions are deleted outright (no row). If the ledger schema or dispositions change, update
+  Step 0, Step 2, Step 2b, Step 3, the interactive options, and the Write step together.
+- If `/log` cannot resolve its session UUID to stamp the processed ledger, that is non-fatal: the
+  session simply surfaces once in the next `/logall`, where the user skips it (recorded) — self-healing.

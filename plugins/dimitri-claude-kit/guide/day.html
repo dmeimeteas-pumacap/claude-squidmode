@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The day — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--day)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; The day</p>
+  <div class="mast">
+    <h1 style="color:var(--day)">✦ The day</h1>
+    <p class="sub">A <b>two-door model</b>, and getting the doors straight is most of the value.
+    <code>/goals</code> is the standing view: areas of concern that persist for weeks.
+    <code>/today</code> is one day's plan, drawn from those areas. Threads
+    (<a href="memory.html">Memory</a>) are separate from both — they are what happened, not what
+    you intend.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html" class="here">The day</a>
+  <a href="thinking.html">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>Which door <span>The single most common confusion in the kit.</span></h2>
+  <div class="lostcol">
+    <h3>/goals — the AREAS door</h3>
+    <ul>
+      <li>Lasts weeks. Survives any single day.</li>
+      <li>"What am I responsible for."</li>
+      <li>Store: <code>goals/goals.md</code></li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>/today — the DAY door</h3>
+    <ul>
+      <li>Lasts until tonight. Rebuilt each morning.</li>
+      <li>"What am I doing right now."</li>
+      <li>Store: <code>accountability/today.md</code></li>
+    </ul>
+  </div>
+  <div class="lostcol">
+    <h3>They connect one way</h3>
+    <ul>
+      <li>Today's picks come <i>from</i> areas.</li>
+      <li>Ticking in <b>/today</b> writes back to the area task.</li>
+      <li>You never sync them by hand.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- =================== /goals =================== -->
+<article class="entry" id="goals">
+  <h3>/goals</h3>
+  <p class="lede f-lede">Standing areas and their task lists. Bare <code>/goals</code> is also the status board.</p>
+
+  <dl class="ex f-forms">
+    <dt>/goals</dt><dd>The board: areas, tasks, live counts, today's summary, open thread pointers, drift footer.</dd>
+    <dt>/goals new "title"</dt><dd>Define an area, through a short capped interview.</dd>
+    <dt>/goals review</dt><dd>Weekly keep / done / drop sweep, with rollover.</dd>
+    <dt>/goals done &lt;id&gt;</dt><dd>Tick a task in its area.</dd>
+    <dt>/goals link &lt;area&gt; &lt;thread&gt;</dt><dd>Connect an area to the thread doing the work.</dd>
+    <dt>/goals plan</dt><dd>Day-planning coach. Every style ends by handing off to <code>/today</code>.</dd>
+    <dt>/goals week | long | all</dt><dd>Board scopes.</dd>
+    <dt>/goals dump</dt><dd>Sort a pile of unsorted thoughts into areas.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What an area is</h4>
+      <p>A tag, an optional north-star, and its own task list. Deliberately coarse: if you have
+      twenty areas you have a task list, not areas.</p>
+      <h4 class="f-when" style="margin-top:11px">The board absorbed the status report</h4>
+      <p>There is no separate "what's my status" command. Bare <code>/goals</code> <i>is</i> that.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Planning styles</h4>
+      <p><code>guided</code> walks you through it; <code>brainstorm</code> opens it up;
+      <code>dump</code> takes a mess and sorts it; <code>propose</code> has Claude draft a day for you
+      to react to; <code>yesterday</code> starts from what you did last.</p>
+      <p>All five <b>end</b> by handing to <code>/today</code>. Planning that doesn't produce a day is
+      just more planning.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">Not for</h4>
+      <p>Today's plan or ticking today's items — that is <code>/today</code>. Capturing what happened
+      — that is <code>/log</code>. Areas are intent; threads are history.</p>
+    </div>
+  </div>
+</article>
+
+<!-- =================== /today =================== -->
+<article class="entry" id="today">
+  <h3>/today</h3>
+  <p class="lede f-lede">Pick and tick the 3-5 things you're actually doing today.</p>
+
+  <dl class="ex f-forms">
+    <dt>/today</dt><dd>Show the plan.</dd>
+    <dt>/today plan</dt><dd>Build today's plan with the coach.</dd>
+    <dt>done 3</dt><dd>Tick top-level item 3.</dd>
+    <dt>done 3, b</dt><dd>Tick sub-item <code>b</code> under item 3.</dd>
+    <dt>add "…"</dt><dd>Append a task mid-day.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">3-5 is a target, not a cap</h4>
+      <p>Items carry light / medium / heavy weights against a soft budget of about five points. The
+      budget gives feedback <b>once</b> and then never blocks you. It is a mirror, not a gate.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Numbering</h4>
+      <p>Top-level items take numbers. <b>Sub-items are lettered under their parent</b>, restarting at
+      <code>a</code> each time, and never consume a top-level number. So a parent at 3 with two
+      children is followed by 4, not 6.</p>
+      <p>Ids shift when you add things, so the list re-renders after any edit — always tick against
+      what is currently shown.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">The write-back</h4>
+      <p>Ticking here flips the mapped task in <code>goals.md</code> — but only if the tick finishes
+      the <b>whole</b> task. A ticked slice leaves the parent open, and it asks when that is ambiguous.</p>
+      <h4 class="f-know" style="margin-top:11px">Weights are ephemeral</h4>
+      <p>Never persisted. Each morning re-coaches from scratch.</p>
+    </div>
+  </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for standing areas or long-lived tasks — that is <code>/goals</code>. Not for recording what happened — that is <code>/log</code>. Today’s plan is intent, not history.</p>
+    </div>
+
+
+  <div class="warn f-warn"><b>The store is the only truth.</b> If you mirror the plan somewhere else (OneNote,
+  a notebook), never treat that mirror as a tick source. Mirrors are output.</div>
+</article>
+
+<!-- =================== /eod =================== -->
+<article class="entry" id="eod">
+  <h3>/eod <span class="tag">typed or scheduled</span></h3>
+  <p class="lede f-lede">Synthesize the whole day across every effort, not just one thread.</p>
+
+  <dl class="ex f-forms">
+    <dt>/eod</dt><dd>Run it now, yourself.</dd>
+    <dt>/eod 2026-07-14</dt><dd>Reconstruct a past day.</dd>
+    <dt>bootstrap\scripts\setup-eod-schedule.ps1</dt><dd>Install a daily run — a late-afternoon pass and an evening pass.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">Claude will not run this for you</h4>
+      <p>It is <code>disable-model-invocation</code>, so asking Claude to "wrap up my day" does
+      <b>not</b> reach it. That is deliberate: a day summary costs real tokens and should be your call.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">But a scheduler will</h4>
+      <p>The model restriction is not a scheduling restriction. The kit ships
+      <code>setup-eod-schedule.ps1</code>, which installs Windows tasks running
+      <code>run-eod.ps1 -Scheduled</code>. Opt-in, and worth it if you would otherwise forget.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">What consumes it</h4>
+      <p>The digest lands in <code>session-notes/eod-latest.md</code>, which is exactly what
+      <code>/reconcile status</code> reads as its prep sheet. So a scheduled <code>/eod</code> quietly
+      makes reconciling cheaper.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not a substitute for <code>/log</code>. This synthesizes across efforts; it does not record the reasoning inside one. A day summary with no threads behind it has little to summarize.</p>
+    </div>
+
+  </div>
+</article>
+
+<!-- =================== /eow =================== -->
+<article class="entry" id="eow">
+  <h3>/eow <span class="tag">you type it</span></h3>
+  <p class="lede f-lede">End-of-week roll-up across the week's efforts.</p>
+
+  <dl class="ex f-forms"><dt>/eow</dt><dd>The week's roll-up. Takes no arguments.</dd></dl>
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">Same model rule</h4>
+      <p><code>disable-model-invocation</code>, like <code>/eod</code>. Claude cannot reach it.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">No scheduler ships</h4>
+      <p>Unlike <code>/eod</code>, there is no shipped setup script for this one — so in practice it
+      only happens when you type it.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for a single day — that is <code>/eod</code>. Running it daily produces a roll-up of one day, which is just a worse <code>/eod</code>.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>A week with no <code>/eod</code> digests behind it has thin material to roll up. The dailies are what make the weekly worth reading.</p>
+    </div>
+
+
+  </div>
+</article>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.10 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>

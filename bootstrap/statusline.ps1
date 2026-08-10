@@ -1,7 +1,7 @@
 # Claude Code statusline: glanceable usage indicator.
 # Reads the statusline JSON payload on stdin and prints one line:
-#   5h: <circle> NN%  wk: <circle> NN%  ctx: <circle> NN%  tok: NNNk
-#   --- tok: NNk · rw: NNk [rN wN] · crw: NNk [rN wN] ---  (all dim; rw = fresh in/out, crw = cache r/w)
+#   working in: <dir> --- 5h: <circle> NN%  wk: <circle> NN%  ctx: <circle> NN%
+#   --- tok: NNk [rN wN crN cwN] ---  (dim; r/w = fresh in/out, cr/cw = cache read/write)
 # Circles fill by that metric's own percentage; color flags severity.
 # Rate-limit fields are absent until the first API response and only for
 # Pro/Max subscribers, so those degrade to "--" when missing.
@@ -384,17 +384,16 @@ if (($null -ne $fiveHr) -or ($null -ne $week)) {
   } catch {}
 }
 
-# Current repo: git top-level basename of the session dir (matches the semantics
-# the session-start banner used before this moved here). "none" outside a repo.
-# Costs one git fork per statusline render — accepted to keep the repo glanceable.
-$repoName = "none"
-$repoDir  = $j.workspace.current_dir
-if (-not $repoDir) { $repoDir = $j.cwd }
-if ($repoDir) {
-  $top = git -C "$repoDir" rev-parse --show-toplevel 2>$null
-  if ($LASTEXITCODE -eq 0 -and $top) { $repoName = Split-Path -Leaf $top }
-}
-$parts = @("current repo: $magenta$repoName$reset")
+# "working in": the dir work is actively being DONE in, not where Claude was
+# launched. Derivation (transcript-tail scan, write-weighted) lives in
+# statusline-lib.ps1, shared with subagent-statusline.ps1 so the main label and
+# the per-agent panel labels use identical methodology. Whole label renders in
+# one uniform magenta; "none" until tool activity actually touches files.
+. (Join-Path $PSScriptRoot 'statusline-lib.ps1')
+$repoLabel = "${magenta}none$reset"
+$wl = Get-WorkingLabel $j.transcript_path
+if ($wl) { $repoLabel = "$magenta$wl$reset" }
+$parts = @("working in: $repoLabel")
 $parts += "---"
 
 $parts += (
@@ -412,10 +411,12 @@ $parts += (
 function Rk([double]$n) { [int][math]::Round($n / 1000.0, [System.MidpointRounding]::AwayFromZero) }
 if ($null -ne $cu) {
   $rk = Rk $rTok; $wk = Rk $wTok; $crk = Rk $crTok; $cwk = Rk $cwTok
-  $rwk = $rk + $wk; $crwk = $crk + $cwk; $tokk = $rwk + $crwk
-  $mid = [char]0x00B7
+  $tokk = $rk + $wk + $crk + $cwk
+  # Compact form: total + the four leaves (r/w = fresh in/out, cr/cw = cache
+  # read/write); the rw/crw subtotals were dropped to make room for the
+  # "working in" label at the left.
   $parts += "---"
-  $parts += "${dim}tok: ${tokk}k $mid rw: ${rwk}k [r$rk w$wk] $mid crw: ${crwk}k [r$crk w$cwk]$reset"
+  $parts += "${dim}tok: ${tokk}k [r$rk w$wk cr$crk cw$cwk]$reset"
 }
 
 

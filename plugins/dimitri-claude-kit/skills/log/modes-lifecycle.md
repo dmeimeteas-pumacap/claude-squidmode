@@ -1,7 +1,7 @@
 # Log Skill — Lifecycle & Checkoff Modes
 
 Read this file when the resolved `/log` mode is one of **pause (3c)**, **close (3d)**,
-**confirm (3f)**, **done (3g)**, **split (3h)**, or **fullclose (3j)**. These fire rarely, so their full procedures live
+**confirm (3f)**, **done (3g)**, **split (3h)**, **fullclose (3j)**, or **merge (3k)**. These fire rarely, so their full procedures live
 here instead of in the always-loaded `SKILL.md` hot path. The step numbers below (step 4 = INDEX
 regen, step 5 = correlation, step 6 = memory promotion) refer to the `## Process` section of
 `SKILL.md`, which is already loaded.
@@ -126,3 +126,70 @@ Read to that line + ~5 margin), same as 3b. Then:
 Confirm: which items were swept (note the `⚑` marker), that the auto-prefix was preserved if present,
 that promotion ran (or was skipped for a `general` thread), and that the thread was closed and moved
 to `done/`.
+
+## 3k — merge (fold one thread into another)
+
+Consolidate two threads into one when they have **stopped diverging** and are no longer worth
+keeping separate. This is the counterpart to `split` (3h): split relocates a subset OUT into a new
+sibling; merge folds a whole thread's history INTO an existing one. The **second sanctioned
+exception** to append-only: append-only entries are *relocated* (copied verbatim into the survivor,
+then the source is archived as a tombstone), so the record is preserved in its new home, never
+destroyed.
+
+Prefer this over deleting a redundant thread, and reach for it only when the two threads are truly
+one effort now. If the two still diverge but always co-implicate each other, **do not merge** —
+offer `coevolves_with` (step 5 in `SKILL.md`) instead: separate files, loaded together. Merge is
+for "these are one thing now"; coevolve is for "these are two things that move together."
+
+Trigger: "merge X into Y", "combine these two threads", "just merge them, no need to keep them
+separate", or an explicit `merge <source-slug> into <survivor-slug>`.
+
+Procedure:
+
+1. **Resolve both threads and pick the survivor.** The survivor is normally the richer / primary /
+   more-active thread (its slug lives on); the other is the **source** that gets folded in. If it
+   is not obvious which should survive, state your pick and the reason and **WAIT for confirmation**
+   before writing anything — a merge edits append-only history on both sides. Read **both** files in
+   full (unlike a capture — a faithful merge needs every Decision and Log entry, so the head-only
+   read of 3b does not apply here).
+2. **Fold the source's content into the survivor**, preserving everything:
+   - **Decisions:** copy every `## Decisions` entry from the source **verbatim** into the survivor's
+     `## Decisions`, wrapped in a provenance marker so origin stays legible:
+     `<!-- ===== Merged <DATE> from [[source-slug]] — decisions preserved verbatim ===== -->` … `<!-- ===== end merged decisions ===== -->`.
+     Tag each copied entry with a trailing `_(merged from source-slug)_`. Place the block at the end
+     of `## Decisions` (do not try to interleave by date — the marker keeps provenance clear).
+   - **Log:** copy every `## Log` entry from the source **verbatim** into the survivor, in a
+     provenance-marked block appended at the **bottom** of `## Log` (keep the source's own dates and
+     any `⚠ AUTO`/`(auto …)` headings; add a `[merged]` tag to each copied heading). Appending the
+     block at the bottom — rather than interleaving newest-first — keeps the survivor's native Log
+     order intact while preserving the source's chronology inside the block.
+   - **Conventions / Next:** absorb any of the source's `## Conventions` that still apply (mark them
+     `(merged in <DATE> from source-slug)`), and fold any still-open `## Next` items worth keeping
+     into the survivor's `## Next` (tag `(merged in from source-slug)`; drop the source's
+     auto-confirm item and anything already done or superseded).
+   - **Where I left off:** add a short `**Merged in (<DATE>):**` note to the survivor's
+     `## Where I left off` naming the source and what it covered.
+3. **Add the merge Log entry to the survivor** (newest-first, a normal dated `### <DATE> (thread
+   merge)` entry): `Did:` names the source and what was folded in + that the source was archived as
+   a tombstone; `Thinking:` why they stopped diverging; `Next:` the survivor's continuing focus.
+   Bump the survivor's `last_touched`.
+4. **Fix cross-links.** Remove the source slug from the survivor's `related:`/`coevolves_with` (it
+   is now internal). Other threads that linked to the source keep their `[[source-slug]]` refs —
+   these resolve to the tombstone (step 5), so they do not dangle; note this rather than chasing
+   every backlink.
+5. **Archive the source as a redirect tombstone** (never delete — the record lives on in the
+   survivor, and backlinks/`/catchup` recall must still resolve). Run **memory promotion** (step 6
+   in `SKILL.md`) against the source's decisions first, same as a close. Then rewrite the source
+   file as a short tombstone and **move it to `done/<source-slug>.md`**: set `status: done`, add a
+   `merged_into: "[[survivor-slug]]"` frontmatter key, add `merged` to its `tags`, point its
+   `related:` at the survivor, and replace the body with a redirect banner (`> **MERGED <DATE> →
+   [[survivor-slug]]**` + one line on where the content went and that nothing was discarded + "do
+   not add new work here"). Do **not** leave a copy in `active/`.
+6. **Step 4 (INDEX):** remove the source's **Active** row; add a **Recently done** row for it whose
+   outcome is `Merged into [[survivor-slug]] (<why>)`; regenerate the survivor's row (`Last` =
+   today, cell reflecting the merge); update the `_Updated …_` header line.
+
+Confirm: the survivor slug, that all of the source's Decisions + Log were copied verbatim under
+provenance markers, which Conventions/Next items were absorbed, the cross-link fixes, that the
+source was archived to `done/` as a tombstone (not deleted), and what (if anything) was promoted to
+memory.

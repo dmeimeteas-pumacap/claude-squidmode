@@ -1,83 +1,75 @@
-# Goals — shared reference (loaded by write modes: new, dump, review, manage)
+# Goals — shared reference (loaded by write modes: new, dump, review, manage; and /today's write-back)
 
 ## Store layout
 
 ```
 ~/.claude/goals/
-  links.tsv            # junction: goal-id <TAB> thread-slug <TAB> relevance
-  active/<id>.md       # active + paused goals
-  done/<id>.md         # completed/abandoned goals (kept readable)
+  goals.md             # THE single action/planning store: every area + its tasks (format below)
+  links.tsv            # junction: area-id <TAB> thread-slug <TAB> relevance
+  done/<id>.md         # retired areas, one extracted file each (kept readable)
 ```
+(The author install also carries a frozen `archive-per-area/` migration backup — historical,
+not part of the store contract; a fresh install never has it.)
 
-`id` = `kebab-title`. Junction relevance ∈ {`primary`, `supporting`, `tangential`}. The junction is
-the **single** store of goal↔thread edges; thread→goal is resolved at read-time by reading
-`links.tsv`. Per-thread `goal:` frontmatter stays `null` (do not denormalize).
+An AREA (= what used to be called a goal) is a `## ` section of `goals.md`: a tag + optional
+north-star + its own list of actionable tasks. **Tasks live HERE, not in threads** — threads are
+MEMORY; a thread `## Next` item is an alignment pointer, not the backlog. `/reconcile` cross-checks
+the two (surface divergence only, never auto-sync).
 
-**No `INDEX.md`.** Goals are few; the board (bare `/goals`) is the live dashboard. Do not create one.
+`id` = the kebab key on the area's metadata line — it is the `links.tsv` key and stays stable even
+when the heading is reworded. Junction relevance ∈ {`primary`, `supporting`, `tangential`}. The
+junction is the **single** store of area↔thread edges; per-thread `goal:` frontmatter stays `null`.
 
-## Goal file format (load-bearing section names)
+**No `INDEX.md`.** Areas are few; the board (bare `/goals`) is the live dashboard.
+
+## Area format (inside `goals.md` — load-bearing)
 
 ```markdown
----
-id: <kebab-id>
-title: <human title>
-status: active            # active | paused | done | abandoned
-created: YYYY-MM-DD
-last_touched: YYYY-MM-DD
-priority: normal          # high | normal | low
-review_after: null        # YYYY-MM-DD; surfaced by board/review when due
----
-
-# <title>
-
-## North star
-<1–2 lines, horizon-agnostic objective. Prose.>
-
-## Horizons
-### Daily
-- [ ] <actionable; sub-items may nest; ↻ N (since MM-DD) on rollover — space before N>
-### Weekly
-- [ ] ...
-### Larger
-<prose direction, or checklist once actionable>
-
-## Dropped
-- YYYY-MM-DD — <dropped item> — <one-line reason>
+## <Area title>
+id: <kebab-id> · prio: <n> · review_after: <YYYY-MM-DD|null>
+live_progress: `<command>` → `<regex, 2 capture groups = done/total>`   (optional line)
+thread: [[<slug>]] · [[<slug>]]                                          (optional line)
+north-star: <1-2 lines, the big-picture "why".>
+- [ ] <actionable task> {deadline:YYYY-MM-DD | this-week | evergreen} ↻ N (since MM-DD)
+  > <optional guardrail/note for the task above>
 ```
 
-A goal includes only the horizons that apply. Daily/Weekly are checklists (actionable,
-roll-forwardable). Larger may be prose — do not fabricate fake tasks.
-
-## Maintain `last_touched`
-Bump `last_touched` to `<DATE>` on any goal file written.
+- `prio` is numeric, lower = higher (1 = top).
+- Every task carries ONE timeliness tag `{deadline:… | this-week | evergreen}` — a selection aid for
+  `/today`'s pick, not a scheduler.
+- `↻ N` = rollover count, space before N (`↻ 3`, never `↻3`) — in the store AND anywhere rendered.
+  Set/bumped only by `review`'s keep-roll. A task rolled ↻ 4+ is a signal (the drift engine flags it).
+- The north-star is optional but fight to keep it — without it the store degrades into the flat
+  tagged to-do list that did not stick before.
+- Completion: flip `- [ ]` → `- [x]` in place (the completed record stays in the list). Retiring a
+  whole AREA = extract its section to `done/<id>.md` (see `manage`) — never delete history.
+- Deliberation/history stays in the linked thread, not here. An area may map 1:1 to a thread, span
+  several, or have none (e.g. the sales book).
 
 ## Guardrails
 
-- **Single-writer.** Goals own their horizon items + `## Dropped`; `links.tsv` is the sole edge
-  store; threads own `## Next`. Never duplicate an edge into thread frontmatter.
-- The board and any reconstruction-style read write **nothing**. `plan` writes nothing to the goals
-  store (it hands off to `/today`).
-- `review`'s keep/done/drop is interactive only — never run it from a headless/scheduled context.
-- `dump` writes nothing before the review gate.
+- **Single-writer.** `goals.md` owns areas + tasks; `links.tsv` is the sole edge store; threads own
+  `## Next`. Never duplicate an edge into thread frontmatter; never move a task into a thread.
+- The board writes **nothing**. `/today` writes the day store (`accountability/today.md`), its
+  goal-map sidecar, and the write-back tick here (checkbox flips only — never task text).
+- `review` and the bare `done` sweep are interactive only — never run headless.
+- `dump` and `new` write nothing before their review gate.
 - Do not modify `eod`, the session-start hook, or thread files from this skill.
-- Headless `claude -p` writing under `~/.claude/` needs `--permission-mode bypassPermissions` —
-  relevant only if a goal action is ever scheduled (goal writes are normally interactive/live).
 
 ## Gotchas
 
-- `↻ N` needs the space (`↻ 3`, not `↻3`) — in the stored marker AND anywhere it is rendered to the
-  user (the board box, `review` prompts, any chat summary). Never collapse it to `↻N`.
-- `links.tsv` is TAB-separated. When editing on Windows, preserve real tabs (do not let an editor
-  expand them to spaces); PowerShell `-Encoding utf8` writes a BOM that can corrupt parsing — prefer
-  ASCII/UTF-8-no-BOM. See memory `powershell-bom-breaks-json`.
-- Dangling junction rows after a thread is deleted are not auto-cleaned — a lint/janitor pass is a
-  future addition. `link` queries should tolerate a row whose thread file is gone.
-- `id` = kebab-title; only add a date prefix if a collision actually appears.
+- `↻ N` needs the space when WRITTEN; readers (board, `detect-drift.ps1`) tolerate `↻N`.
+- `links.tsv` is TAB-separated. PowerShell `-Encoding utf8` writes a BOM that corrupts parsing —
+  edit with the Edit tool / UTF-8-no-BOM. See memory `powershell-bom-breaks-json`.
+- Areas are keyed by the `id:` metadata line, NOT the heading text — headings may be reworded freely.
+- `goals.md` is hand-editable by design; parsers must tolerate blank lines and `> note` lines
+  between tasks.
+- If `goals.md` ever outgrows eyeballing, splitting back to per-area files is a deliberate future
+  change — update `detect-drift.ps1` + `modes/board.md` in lockstep (both parse this format).
 
 ## Versioning
 
-- If the trigger misfires (esp. vs `/log` / `/catchup` / `/eod` / `/today`) → tighten the router
+- Trigger misfires (esp. vs `/log` / `/catchup` / `/eod` / `/today`) → tighten the router
   `description` first.
-- If `dump` segmentation over-fragments → strengthen the fewer/broader-goals guardrail + add a gotcha.
-- When the thread or `eod` formats change → update `modes/board.md` aggregation + read-time resolution.
-- Mode files live in `modes/`; shared store/format rules live here. Keep the router thin.
+- Format changes here ripple to: `modes/board.md`, `modes/today.md`, `modes/review.md`,
+  `modes/manage.md`, `janitor/detect-drift.ps1`. Update them together.

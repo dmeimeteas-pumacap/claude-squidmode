@@ -17,7 +17,8 @@
 param(
   [string] $ClaudeDir = (Join-Path $env:USERPROFILE '.claude'),
   [string] $RepoRoot  = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)),
-  [string] $Version   # defaults to the VERSION file (the single source of truth); -Version overrides
+  [string] $Version,  # defaults to the VERSION file (the single source of truth); -Version overrides
+  [switch] $AllowIncompleteDocs  # downgrade Assert-GuideCoverage failures to [REVIEW] lines
 )
 $ErrorActionPreference = 'Stop'
 if (-not $Version) {
@@ -26,13 +27,19 @@ if (-not $Version) {
 }
 
 # --- ALLOWLIST (executable source of truth; mirrors PACKAGE-MANIFEST.md) -------------------
-$ShipSkills = @('catchup','catchupall','change-review','document-process',
-  'document-section','eod','eow','goals','grill-me','log','logall','skill-builder','scrutinize-plan','tutorial')
-$ExcludeSkills   = @('maystreet-pull','test-safety-audit','today','document-overall','update-statuses')   # coupled/deferred/local -- never ship (update-statuses = renamed checkout, kept local for now)
+$ShipSkills = @('catchup','catchupall','change-review','deepclean','document-process',
+  'document-section','eod','eow','goals','grill-me','kit','log','logall','reconcile','skill-builder','scrutinize','today','tutorial')
+$ExcludeSkills   = @('maystreet-pull','test-safety-audit','document-overall')   # coupled/local -- never ship. (today ships since v0.1.6: the DAY door, CLI-free. reconcile+deepclean ship since v0.1.6.1 with the janitor engine. update-statuses/current/task-tracker skills deleted 2026-07-31, folded into reconcile//goals//today.)
+# Janitor engine (v0.1.6.1): shipped into the plugin scripts dir; the staleness hook in hooks.json
+# runs from there, and skills fall back to ${CLAUDE_PLUGIN_ROOT}/scripts when ~/.claude/janitor is absent.
+$ShipJanitor = @('detect-drift.ps1','staleness-check.ps1')
 $ShipCommands    = @('theme.md')
 $ShipHooks       = @('session-start-global.sh','expand-prompt.sh')
 $BootstrapAssets = @(
   @{ src='statusline.ps1';                 dst='statusline.ps1' },
+  # statusline.ps1 dot-sources this lib (Get-WorkingLabel); shipping one without the other breaks
+  # every fresh install's bar (0.1.8 defect B1). Assert-ScriptDeps now gates this class at build time.
+  @{ src='statusline-lib.ps1';             dst='statusline-lib.ps1' },
   @{ src='themes/cc-active.json';          dst='themes/cc-active.json' },
   @{ src='scripts/setup-eod-schedule.ps1'; dst='scripts/setup-eod-schedule.ps1' },
   @{ src='scripts/run-eod.ps1';            dst='scripts/run-eod.ps1' }
@@ -118,6 +125,12 @@ function Sync-Hooks {
     if ($c -match [regex]::Escape('$HOOK_DIR/..')) { throw "Hook '$h' still resolves CLAUDE_DIR from BASH_SOURCE -- D1 patch did not apply (source line changed?)" }
     Write-NoBom (Join-Path $destRoot $h) $c
   }
+  # janitor engine (v0.1.6.1): ships beside the hook scripts; ASCII/BOM-less by policy already
+  foreach ($j in $ShipJanitor) {
+    $src = Join-Path $ClaudeDir "janitor/$j"
+    if (-not (Test-Path $src)) { throw "Allowlisted janitor script '$j' not found at $src" }
+    Copy-Item $src (Join-Path $destRoot $j) -Force
+  }
   # copy the hand-maintained hooks.json + stamp the plugin-side version marker (B4)
   Copy-Item (Join-Path $RepoRoot "$PluginRel/hooks/hooks.json") (Stage-Path "$PluginRel/hooks/hooks.json") -Force
   # Ship the Git Bash wrapper VERBATIM (no LF conversion -- cmd.exe needs CRLF). hooks.json invokes
@@ -125,7 +138,7 @@ function Sync-Hooks {
   # It rides in the package, so `claude plugin update` re-ships it intact (no in-place patch to wipe).
   Copy-Item (Join-Path $RepoRoot "$PluginRel/scripts/run-bash-hook.cmd") (Join-Path $destRoot 'run-bash-hook.cmd') -Force
   Write-NoBom (Join-Path $destRoot '.kit-version') $Version
-  $Report.Add("hooks: $($ShipHooks -join ', ') (D1-patched) + run-bash-hook.cmd; .kit-version=$Version")
+  $Report.Add("hooks: $($ShipHooks -join ', ') (D1-patched) + run-bash-hook.cmd + janitor [$($ShipJanitor -join ', ')]; .kit-version=$Version")
 }
 
 function Sync-BootstrapAssets {
@@ -217,6 +230,147 @@ function Sync-Docs {
   }
 }
 
+function Sync-Guide {
+  # The usage guide is authored REPO-SIDE (unlike skills, which are derived from live ~/.claude).
+  # It MUST be staged explicitly: Promote-Stage does Remove-Item -Recurse on the plugin dir before
+  # copying the stage over it, so an unstaged guide/ folder is DELETED on every build.
+  $src = Join-Path $RepoRoot "$PluginRel/guide"
+  if (-not (Test-Path $src)) { $Report.Add("[WARN] guide/ missing (write it): $PluginRel/guide"); return }
+  $dst = Stage-Path "$PluginRel/guide"
+  New-Item -ItemType Directory -Path $dst -Force | Out-Null
+  # Copy the CONTENTS, not the folder: Invoke-Build pre-creates $dst, and Copy-Item on an existing
+  # destination nests the source inside it (guide/guide/*.html), which the coverage check then
+  # cannot see.
+  Copy-Item (Join-Path $src '*') $dst -Recurse -Force
+  # Stamp version + command COUNT into every staged page. IDEMPOTENT: we replace the whole
+  # <p class="vstamp">...</p> element rather than a one-shot __KIT_STAMP__ placeholder. Promote-Stage
+  # copies the stamped pages back over the repo, so a placeholder is consumed after a single build and
+  # every later build would report it missing. Replacing the element survives any number of builds.
+  $cmdCount = $ShipSkills.Count + $ShipCommands.Count
+  $stampText = "Claude Kit v$Version &middot; $cmdCount commands &middot; open these files any time, no session required"
+  $stampEl   = '<p class="vstamp">' + $stampText + '</p>'
+  foreach ($f in Get-ChildItem $dst -Filter '*.html' -File) {
+    $t = [IO.File]::ReadAllText($f.FullName)
+    if ($t -match '<p class="vstamp">') {
+      $t = [regex]::Replace($t, '<p class="vstamp">.*?</p>', [System.Text.RegularExpressions.MatchEvaluator]{ param($m) $stampEl }, 'Singleline')
+    } elseif ($t -match '__KIT_STAMP__') {
+      $t = $t.Replace('__KIT_STAMP__', $stampText)
+    } else {
+      $t = $t.Replace('</body>', "$stampEl`n</body>")
+    }
+    [IO.File]::WriteAllText($f.FullName, $t, (New-Object System.Text.UTF8Encoding($false)))
+  }
+  $n = @(Get-ChildItem $dst -Filter '*.html' -File).Count
+  $Report.Add("guide: $n pages + style.css staged, stamped v$Version / $cmdCount commands (authored repo-side)")
+}
+
+function Assert-GuideCoverage {
+  # Two directions, deliberately small. Contract: every command entry is
+  # <article class="entry" id="name">, and every command MENTION is <code>/name</code>.
+  $guide = Stage-Path "$PluginRel/guide"
+  if (-not (Test-Path $guide)) {
+    $msg = "Assert-GuideCoverage: no staged guide/ to check"
+    if ($AllowIncompleteDocs) { $Report.Add("[REVIEW] $msg"); return }
+    throw $msg
+  }
+
+  $installed = @($ShipSkills) + @($ShipCommands | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) })
+  # Host-tool commands are legitimate to reference (the guide says "/help is Claude Code's own,
+  # untouched" -- a true statement the check must not force us to delete). Explicit + short, so a
+  # typo still fails.
+  $builtIns = @('help','clear','config','hooks','plugins','resume')
+  $known    = $installed + $builtIns
+
+  $pages = @(Get-ChildItem $guide -Filter '*.html' -File)
+  $blob  = ($pages | ForEach-Object { Get-Content $_.FullName -Raw -Encoding UTF8 }) -join "`n"
+
+  $problems = New-Object System.Collections.Generic.List[string]
+
+  # --- Direction A: installed => documented, with fields scoped INSIDE the article ---
+  $required = @('f-lede','f-forms','f-what','f-when','f-not','f-know')
+  foreach ($cmd in $installed) {
+    $m = [regex]::Match($blob, '<article class="entry" id="' + [regex]::Escape($cmd) + '">(.*?)</article>',
+                        [Text.RegularExpressions.RegexOptions]::Singleline)
+    if (-not $m.Success) { $problems.Add("no guide entry for /$cmd (expected <article class=`"entry`" id=`"$cmd`">)"); continue }
+    $body = $m.Groups[1].Value
+    foreach ($f in $required) {
+      if ($body -notmatch [regex]::Escape($f)) { $problems.Add("/$cmd entry is missing field class '$f'") }
+    }
+  }
+
+  # --- Direction B: documented => installed (this is the direction that catches dead references) ---
+  $skillMd = Stage-Path "$PluginRel/skills/kit/SKILL.md"
+  $scan = $blob
+  if (Test-Path $skillMd) { $scan += "`n" + (Get-Content $skillMd -Raw -Encoding UTF8) }
+  foreach ($mm in [regex]::Matches($scan, '<code>/([a-z][a-z-]{1,})</code>')) {
+    $tok = $mm.Groups[1].Value
+    if ($known -notcontains $tok) { $problems.Add("guide references /$tok, which is not installed") }
+  }
+
+  # --- Count: entries must equal installed commands ---
+  # Count only COMMAND entries. Convention: <article class="entry"> is a command; <div class="entry">
+  # is a topic section (the ambient/stores/troubleshooting pages), which has no installed counterpart.
+  $entryCount = [regex]::Matches($blob, '<article class="entry"').Count
+  if ($entryCount -ne $installed.Count) {
+    $problems.Add("entry count $entryCount != installed command count $($installed.Count)")
+  }
+
+  # --- Ambient page's cited script paths must exist in the stage ---
+  $ambient = Join-Path $guide 'ambient.html'
+  if (Test-Path $ambient) {
+    $a = Get-Content $ambient -Raw -Encoding UTF8
+    # Shipped executables only. A .json under janitor/ is a RUNTIME artifact the hook creates on the
+    # user's machine, not something the package carries, so requiring it in the stage is a false
+    # positive -- the same trap as keying a build-time check to install-time output.
+    foreach ($sm in [regex]::Matches($a, '<code>([A-Za-z0-9_.-]+\.(?:ps1|sh|cmd))</code>')) {
+      $name = $sm.Groups[1].Value
+      if (-not @(Get-ChildItem $Stage -Recurse -File -Filter $name).Count) {
+        $problems.Add("ambient.html cites '$name', absent from the staged package")
+      }
+    }
+  }
+
+  if ($problems.Count) {
+    if ($AllowIncompleteDocs) {
+      $Report.Add("[REVIEW] Assert-GuideCoverage: $($problems.Count) issue(s) DOWNGRADED by -AllowIncompleteDocs")
+      $problems | ForEach-Object { $Report.Add("[REVIEW]   $_") }
+      return
+    }
+    Write-Host "`n!! Assert-GuideCoverage FAILED:" -ForegroundColor Red
+    $problems | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
+    throw "Assert-GuideCoverage: $($problems.Count) issue(s). Fix, or re-run with -AllowIncompleteDocs."
+  }
+  $Report.Add("Assert-GuideCoverage: clean ($($installed.Count) commands, $($pages.Count) pages)")
+}
+
+function Assert-ScriptDeps {
+  # P9 (0.1.9): a staged script that dot-sources / sources a SIBLING script must ship that sibling.
+  # This is the gate that would have caught B1 (statusline.ps1 requiring an unshipped
+  # statusline-lib.ps1). HARD gate on purpose -- a missing include is never a docs-quality issue,
+  # so -AllowIncompleteDocs does not downgrade it.
+  $problems = New-Object System.Collections.Generic.List[string]
+  $stagedNames = @(Get-ChildItem $Stage -Recurse -File | ForEach-Object { $_.Name })
+  $includePats = @(
+    '\.\s+\(Join-Path\s+\$PSScriptRoot\s+[''"]([^''"]+\.ps1)[''"]\)',                          # . (Join-Path $PSScriptRoot 'lib.ps1')
+    '(?m)(?:^|[;&|]\s*)(?:source|\.)\s+"?\$(?:\{[A-Za-z_]+\}|[A-Za-z_]+)/([A-Za-z0-9_.-]+\.(?:sh|ps1))"?'  # source "$DIR/x.sh"
+  )
+  foreach ($f in Get-ChildItem $Stage -Recurse -File -Include '*.ps1','*.sh') {
+    $text = [System.IO.File]::ReadAllText($f.FullName)
+    foreach ($p in $includePats) {
+      foreach ($m in [regex]::Matches($text, $p)) {
+        $dep = Split-Path -Leaf $m.Groups[1].Value
+        if ($stagedNames -notcontains $dep) { $problems.Add("$($f.Name) includes '$dep', which is absent from the staged package") }
+      }
+    }
+  }
+  if ($problems.Count) {
+    Write-Host "`n!! Assert-ScriptDeps FAILED -- staged scripts include files that do not ship:" -ForegroundColor Red
+    $problems | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
+    throw "Assert-ScriptDeps: $($problems.Count) issue(s). Add the missing file(s) to the allowlist or remove the include."
+  }
+  $Report.Add("Assert-ScriptDeps: clean")
+}
+
 function Assert-NoPersonalData {
   $hits = New-Object System.Collections.Generic.List[string]
   Get-ChildItem $Stage -Recurse -File | ForEach-Object {
@@ -255,7 +409,7 @@ function Invoke-Build {
   if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
   New-Item -ItemType Directory -Path $Stage -Force | Out-Null
   foreach ($d in @("$PluginRel/skills","$PluginRel/commands","$PluginRel/scripts","$PluginRel/hooks",
-                   "$PluginRel/.claude-plugin",".claude-plugin","bootstrap/themes","bootstrap/scripts")) {
+                   "$PluginRel/.claude-plugin","$PluginRel/guide",".claude-plugin","bootstrap/themes","bootstrap/scripts")) {
     New-Item -ItemType Directory -Path (Stage-Path $d) -Force | Out-Null
   }
 
@@ -267,6 +421,9 @@ function Invoke-Build {
   Build-ClaudeTemplate
   Generate-SkillReference
   Sync-Docs
+  Sync-Guide
+  Assert-GuideCoverage      # <- HARD GATE: dead refs / missing entries (see -AllowIncompleteDocs)
+  Assert-ScriptDeps         # <- HARD GATE: shipped script includes an unshipped sibling (B1 class)
   Assert-NoPersonalData     # <- HARD GATE: throws before Promote on any leak
   Promote-Stage
   Remove-Item $Stage -Recurse -Force -ErrorAction SilentlyContinue

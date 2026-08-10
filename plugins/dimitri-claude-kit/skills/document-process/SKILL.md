@@ -6,7 +6,9 @@ description: "Produce a README-style document for a single existing project, ser
 
 Produce a clear, accurate, README-style document for **one** existing project, service, or process.
 
-> **Status: provisional starting point.** In-house conventions for authoring skills are not settled yet. Treat this skill's structure as a reasonable default, not a fixed standard — expect it to be revised once those conventions exist. Two companion skills are planned and out of scope here: `document-section` (batch documentation across a defined subset or the full codebase) and `document-overall` (unified system overview synthesized from per-process docs and external resources).
+> Tier 1 of the documentation family: **`document-process`** (one project, the canonical granular
+> doc) → `document-section` (a slice) → `document-overall` (flow synthesis + freshness actuator).
+> `document-concerns` owns the concern-ledger rules; this skill only flags (see Concern flagging).
 
 ## Model and effort
 
@@ -67,6 +69,7 @@ Collect from:
 
 Apply this discipline to everything collected:
 - **Verify, don't propagate.** Each existing claim must be confirmed against current code before it survives into the new doc.
+- **Carve-out — ledger-verified comments (docs-program-v2 P1, 2026-08-05).** Before distrusting a source comment, check the project's comment ledger (`.claude/coverage/comment-ledger/<project>.jsonl`, or the generated `comment-ledger.md` view). A comment with an `applied` ledger record (any origin: authored, absorbed, or revised) has already passed two-stage human review — treat it as VERIFIED input, not a claim to re-check. Comments in files with no ledger records keep the full distrust-and-verify rule.
 - **Weigh recency.** Compare comment/doc dates against the code they describe. A comment older than the logic it narrates is a red flag, not a citation.
 - **Reconcile contradictions explicitly.** When a comment, a README, and the code disagree: **code wins**, and record the discrepancy.
 - **Preserve intent even when mechanics are stale.** A comment's *why* may be worth carrying forward as "intent per original author; mechanics have since changed," flagged as such.
@@ -138,13 +141,36 @@ Use `git log` and `git diff` on the relevant source files if helpful. You are lo
 ### Update Pass 2 — Patch the affected sections
 Edit only the sections the delta affects. Preserve all unchanged content verbatim — do not reword sections that are still accurate just to leave a mark. Resolve any items in **Known gaps / future work** that are now done by moving the content into the appropriate section as a verified statement. Add new gaps or questions if the changes introduce them.
 
-### Update Pass 3 — Self-revision + user checkpoint
-Same as Create mode Passes 5 and 6 combined:
-- Re-read the patched README as a whole; confirm it still reads coherently after the edits.
-- Present the user with: what changed, any new open questions, and the updated doc for review.
+**Reviewed-section fence (docs-program-v2 P1, 2026-08-05).** A section whose heading is immediately followed by a line matching `*Reviewed: YYYY-MM-DD <initials>*` is HUMAN-REVIEWED content, protected to the next same-or-higher heading. Machine updates never rewrite inside a fence: patch around it, or — if the delta genuinely lands inside it — HOLD that edit and flag it in the report (headless) or to the user (interactive). Human-reviewed text is never machine-overwritten.
+
+**Reviewed-column upkeep.** After any applied machine patch to a doc, update its coverage-ledger row's last (`Reviewed`) cell: if the patch was user-approved in-session, refresh the date; otherwise append the machine-change note so the cell reads `YYYY-MM-DD <initials> --- Machine changed YYYY-MM-DD` (re-review advised) — never blank it.
+
+### Update Pass 3 — Self-revision + checkpoint (interactive) OR write-and-report (headless)
+Re-read the patched README as a whole; confirm it still reads coherently after the edits. Then:
+
+- **Interactive invocation (default):** present the user with what changed, any new open questions,
+  and the updated doc for review — same as Create mode Passes 5 and 6 combined.
+- **Headless invocation (the caller — normally `document-overall`'s update mode — states it is
+  headless):** there is no one to checkpoint. Apply the WRITE-AND-REPORT policy instead:
+  - **Apply the update by default** — small-scale drift is relatively self-evident and easily
+    reasoned.
+  - **Flag meaningful uncertainty**: route it into the doc's *Open questions* / *Known gaps* sections
+    AND into the structured report returned to the caller.
+  - **Hold only when especially uncertain**: write nothing for that doc; return the proposed diff in
+    the report for later review.
+  - Return a structured report to the caller: `applied` (sections patched), `flagged` (each
+    uncertainty, one line), or `held` (the diff + why).
 
 ### Update Pass 4 — Final patch
-Fold in any user feedback, then write the file. Point the user to the path.
+Interactive: fold in any user feedback, then write the file and point the user to the path.
+Headless: the file was already written (or held) in Pass 3; the report is the output.
+
+### Concern flagging (both modes)
+If an Update run surfaces a NEW concern (committed secret, risk pattern, defect), APPEND one row to
+the pending-flag queue `Documentation/concerns-pending.md` (create-if-missing with the header row):
+`| Date | Source (skill/run/audit row) | Affected project or doc (path) | Concern (one line) |`
+Never write `Documentation/concerns-ledger.md` directly — `document-overall` Phase 6 reconciles the
+queue through `document-concerns`. Never reproduce secret VALUES — config-key name + location only.
 
 ---
 
@@ -158,5 +184,6 @@ Fold in any user feedback, then write the file. Point the user to the path.
 - **Don't over-document trivial leaf code** — depth belongs on the non-obvious (Pass 3), not on restating obvious getters.
 - **Don't conflate gaps with open questions.** *Known gaps / future work* holds resolved-but-incomplete items (documented limitations, untuned params, maturation steps). *Open questions* holds only genuinely-unanswered items needing a human. An empty Open-questions section is a good outcome — don't pad it with future-work items.
 - **Don't broaden scope to other projects** — one project per run; multi-project work belongs to `document-section` and cross-project synthesis to `document-overall`.
+- **Don't spawn sub-agents or fan out.** You personally read the source and write the doc — do NOT dispatch Explore/Task sub-agents to inventory the project. (Observed failure: an agent decomposed a 154-file library into 5 research streams and stalled waiting on them, producing nothing.) For a large project, orient by top-level directory/domain grouping and sample the key types per group; summarize each group. A lean, correct, well-organized overview with honest "not fully traced" notes beats an exhaustive per-file inventory — and never stalls.
 - **In update mode, don't rewrite what hasn't changed.** Rewording accurate, verified content just to make an edit is noise — it introduces diff without value and risks subtly altering meaning. Touch only what the code delta actually invalidates.
 - **Don't skip mode detection.** Running Create mode on a project that already has a good README throws away verified work. Always check for an existing README first.

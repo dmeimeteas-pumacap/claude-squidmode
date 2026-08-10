@@ -1,42 +1,40 @@
 # Mode: review (interactive keep / done / drop sweep; live session only)
 
-Also read `reference.md` (file format, store layout, guardrails). **Never run headless** — there is
-no one to answer the popups.
+Also read `reference.md` (store layout, area format, guardrails). **Never run headless** — there is
+no one to answer the popups. Cadence: weekly is the intended rhythm (also surfaced whenever an
+area's `review_after` comes due); running it more often is fine.
 
-Collect every active goal's unchecked `### Daily` (and `### Weekly`) items, then run a **two-pass**
-sweep via **`AskUserQuestion` popups — not a typed-out table.** Default is Keep: an item not ticked
-in either pass is kept and rolled. Two passes (Done, then Drop) batch all of a goal's items into ~2
-questions, which scales better than one-question-per-item when reviewing many goals at once.
+Collect every area's unchecked tasks from `~/.claude/goals/goals.md`, then run a **two-pass** sweep
+via **`AskUserQuestion` popups — not a typed-out table.** Default is Keep: a task not ticked in
+either pass is kept and rolled. Two passes (Done, then Drop) batch all of an area's tasks into ~2
+questions, which scales better than one-question-per-item.
 
-- **Pass 1 — DONE.** One **multiSelect** question per goal that has unchecked items. `header` = the
-  goal title; prompt = "Which items are now DONE (completed)? Untick = not done yet." `options` =
-  that goal's unchecked items, **plus a trailing `— none done —` option** so the question always has
-  ≥2 options (AskUserQuestion rejects a single-option question — required padding, not cosmetic).
-  Ticked items → Done.
-- **Pass 2 — DROP.** One **multiSelect** question per goal that *still* has open items after Pass 1
-  (skip any goal whose items were all marked done). prompt = "Of what's left, tick any to DROP
-  (abandon — archived with a reason). Untick = keep & carry forward." `options` = the goal's
-  still-open items **plus a trailing `— none to drop —` option** (same ≥2 reason). Ticked → Drop.
+- **Pass 1 — DONE.** One **multiSelect** question per area that has unchecked tasks. `header` = the
+  area title; prompt = "Which are now DONE (completed)? Untick = not done yet." `options` = that
+  area's unchecked tasks, **plus a trailing `— none done —` option** (AskUserQuestion rejects a
+  single-option question — required padding). Ticked → Done.
+- **Pass 2 — DROP.** One **multiSelect** question per area that *still* has open tasks after Pass 1.
+  prompt = "Of what's left, tick any to DROP (abandoned — removed with a reason). Untick = keep &
+  roll." `options` = the still-open tasks **plus `— none to drop —`**. Ticked → Drop.
 - **Untouched in both passes → Keep (roll).**
-- **Caps (hard `AskUserQuestion` limits):** ≤4 questions per call and ≤4 options per question. >4
-  goals-with-items splits each pass across sequential calls; a goal with >3 unchecked items splits
-  across multiple questions within a pass (3 items + the `— none —` sentinel = the 4-option max). Do
-  not silently truncate — every unchecked item must appear in a Pass-1 popup, and every still-open
-  item in a Pass-2 popup.
-- **Done** (Pass 1) → flip `- [ ]` → `- [x]` in place; the item stays in its checklist as a completed
-  record (same mechanic as `manage` done).
-- **Drop** (Pass 2) → move the item to the goal's `## Dropped` section as
-  `YYYY-MM-DD — <item> — <reason>`. Take the reason from the option's notes field, or a brief
-  follow-up prompt if absent.
-- **Keep (roll)** (untouched) → leave the item `[ ]`, increment its rollover marker:
-  `- [ ] item ↻ 3 (since MM-DD)` (space before N; set `(since …)` to the date first rolled if not
-  already present). Do NOT bump an item already rolled today (its `(since <DATE>)` equals `<DATE>`).
-  An item created **this** cycle (no marker, born today) is not stale — leave it unmarked rather than
-  stamping `↻ 1`.
-- **Whole-goal action:** if the user signals the *entire goal* is done or abandoned (e.g. via a
-  popup's free-text "Other"), that is a lifecycle change — route it to `manage` set (`status`
-  done/abandoned, move `active/<id>.md` → `done/<id>.md`, clean its `links.tsv` rows), not an
-  item-level edit.
+- **Caps (hard `AskUserQuestion` limits):** ≤4 questions per call, ≤4 options per question. >4
+  areas-with-tasks splits each pass across sequential calls; an area with >3 unchecked tasks splits
+  across questions (3 + the sentinel = the 4-option max). Never silently truncate.
+- **Done** (Pass 1) → flip `- [ ]` → `- [x]` in place (same mechanic as `manage` done; if the task
+  is on today's tracker plan per the sidecar, tick there too — `modes/manage.md` done).
+- **Drop** (Pass 2) → replace the task line with a dated drop record beneath the area:
+  `- ~~<task>~~ dropped YYYY-MM-DD — <reason>`. Take the reason from the option's notes field, or a
+  brief follow-up prompt.
+- **Keep (roll)** (untouched) → leave the task `[ ]`, increment its rollover marker:
+  `↻ N (since MM-DD)` (space before N; set `(since …)` to the date first rolled). Do NOT bump a task
+  already rolled today, and do NOT stamp `↻ 1` on a task born this cycle. **Rollover is a signal,
+  not a ritual:** a task hitting ↻ 3+ gets a coach comment — re-scope it (smaller slice), re-time it
+  (wrong part of the day/week), or drop it honestly — rather than another silent roll.
+- **North-star check (once per sweep, lightweight):** for any area whose tasks all rolled or
+  dropped, ask whether the north-star still describes something the user wants — a dead north-star
+  means retire the area (`manage` set lifecycle), not keep rolling its husk.
+- **Whole-area action:** if the user signals the *entire area* is done or abandoned (e.g. via a
+  popup's free-text "Other"), route it to `manage` set (extract the section to `done/<id>.md`,
+  clean `links.tsv` on abandon), not an item-level edit.
 
-Then surface any goal whose `review_after` ≤ `<DATE>` and ask (popup) whether to re-evaluate it.
-Bump `last_touched` on every edited goal.
+Then surface any area whose `review_after` ≤ `<DATE>` and ask (popup) whether to re-evaluate it.

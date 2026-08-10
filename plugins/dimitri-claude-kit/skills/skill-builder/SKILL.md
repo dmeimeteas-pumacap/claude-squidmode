@@ -13,13 +13,17 @@ You build and revise Claude Code skills. Before doing anything else, determine w
 
 Before asking any interview questions, do the following:
 
-1. List the contents of `~/.claude/skills/` to see what skills already exist.
-2. If the user mentioned a skill name, check whether a directory matching it (exactly or approximately) already exists there.
+1. List the contents of `~/.claude/skills/` to see what user-built skills already exist. If that
+   directory does not exist, there are no user skills yet — that is normal on a fresh/plugin
+   install, not an error (it gets created on the first skill write). When `CLAUDE_PLUGIN_ROOT` is
+   set, ALSO list `${CLAUDE_PLUGIN_ROOT}/skills/` — kit-shipped skills live there, and revising one
+   of those means proposing the change to the kit author, not editing the plugin cache in place.
+2. If the user mentioned a skill name, check whether a directory matching it (exactly or approximately) already exists in either location.
 3. Also check whether a skill was just created in this session — if the user says "the skill I just made" or "the one we just built," treat that as a match.
 
 **If a matching skill is found:**
 
-Read the SKILL.md and present a one-line summary of what it does. Then ask: "I found an existing skill at `~/.claude/skills/[name]/SKILL.md` — [one-line summary]. Do you want to revise this one, or build a new skill from scratch?"
+Read the SKILL.md and present a one-line summary of what it does. Then ask: "I found an existing skill at `[its actual path]/SKILL.md` — [one-line summary]. Do you want to revise this one, or build a new skill from scratch?" (A kit-shipped skill under the plugin root is revised as a NEW user skill in `~/.claude/skills/` that overrides/extends it, or as a suggestion to the kit author — never by editing the plugin cache.)
 
 - If **revise**: skip to Revision Mode below.
 - If **new skill**: proceed to Step 1.
@@ -261,7 +265,7 @@ After writing the file:
 
 ## Rules
 
-- **Check for existing skill first. Always.** List `~/.claude/skills/` before asking any questions.
+- **Check for existing skill first. Always.** List `~/.claude/skills/` (tolerating its absence on a fresh install) and, when `CLAUDE_PLUGIN_ROOT` is set, `${CLAUDE_PLUGIN_ROOT}/skills/`, before asking any questions.
 - **Interview first for new skills. Always.** Never write a new skill before all five questions are answered.
 - **Revision mode for existing skills.** Never run the full interview on a skill that already exists — only ask about the sections that need changing.
 - **Write the file.** Don't paste the SKILL.md contents in chat — write it to disk and confirm the path.

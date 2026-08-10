@@ -57,7 +57,10 @@ Ask the user, in one short prompt: "What do *you* think were your top wins this 
 their list. Now you have two pools: what they named, and what the scan surfaced.
 
 ### Step 4 — Recommend the top 3
-Present compactly — a short numbered list, one line each, no essays:
+Rank candidates on the same two axes the EOD's "What moved today" section uses: **progress**
+(shipped/closed outranks advanced outranks merely-touched) then **impact**. Do NOT carry the
+EOD's `~time · N sent` metrics into this block — they are internal effort signals, not something a
+boss reads. Present compactly — a short numbered list, one line each, no essays:
 - Lead with a recommended top 3 (bias toward shipped/closed work and things with evidence).
 - Explicitly flag any scan-surfaced item the user did **not** mention ("you didn't list this —
   worth including?"). Surfacing forgotten work is a core job of this skill.

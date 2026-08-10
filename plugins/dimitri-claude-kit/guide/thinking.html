@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thinking — Claude Kit cheatsheet</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="--accent:var(--think)">
+
+<header>
+  <p class="crumb"><a href="index.html">&larr; cheatsheet</a> &nbsp;·&nbsp; Thinking</p>
+  <div class="mast">
+    <h1 style="color:var(--think)">△ Thinking</h1>
+    <p class="sub">Three tools for not fooling yourself. Two of them push back on your ideas and
+    differ mainly in <b>when</b> they arrive: <code>/grill-me</code> while the plan is still soft,
+    <code>/scrutinize</code> once it has hardened. The third isn't a command at all.</p>
+  </div>
+</header>
+
+<nav>
+  <span class="navlabel">pages</span>
+  <a href="index.html">Overview</a>
+  <a href="memory.html">Memory</a>
+  <a href="day.html">The day</a>
+  <a href="thinking.html" class="here">Thinking</a>
+  <a href="documentation.html">Documentation</a>
+  <a href="upkeep.html">Upkeep</a>
+  <a href="ambient.html">Runs on its own</a>
+  <a href="stores.html">Files</a>
+  <a href="troubleshooting.html">Fixing things</a>
+</nav>
+
+<div class="lost">
+  <h2>Which one <span>Timing decides it, not subject matter.</span></h2>
+  <div class="lostcol">
+    <h3>Still forming</h3>
+    <ul><li><b>/grill-me</b> — conversational, one question at a time, until you both see the same plan.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Already formed</h3>
+    <ul><li><b>/scrutinize</b> — a fresh critic attacks the finished thing and returns a verdict.</li></ul>
+  </div>
+  <div class="lostcol">
+    <h3>Already written</h3>
+    <ul><li>Line-level bugs in real code are neither of these. <b>/scrutinize</b> critiques reasoning, not implementations.</li></ul>
+  </div>
+</div>
+
+<!-- =================== /grill-me =================== -->
+<article class="entry" id="grill-me">
+  <h3>/grill-me</h3>
+  <p class="lede f-lede">Get interrogated about a plan or design until it actually holds together.</p>
+
+  <dl class="ex f-forms"><dt>/grill-me</dt><dd>Takes no arguments — describe the plan in the conversation and it starts asking.</dd></dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">How it behaves</h4>
+      <p>One question at a time, then it stops and waits. It works down the branches of the decision
+      tree rather than asking everything at once, and it raises a concern <b>at the moment it
+      appears</b> instead of saving up a critique for the end.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Why one at a time matters</h4>
+      <p>A wall of ten questions gets three answered. Worse, a concern held back until you've
+      committed to a direction arrives too late to change anything.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Reach for it when</h4>
+      <p>You have a rough idea and a suspicion it has holes you can't see. Also good when you're about
+      to build something big and want the assumptions named out loud first.</p>
+    </div>
+  </div>
+    <div class="block">
+      <h4 class="f-not">When NOT to</h4>
+      <p>Not for a finished plan you want judged — that is <code>/scrutinize</code>, which runs a critic blind to your reasoning. Use this while the plan is still soft; once it has hardened, interrogation just re-litigates.</p>
+    </div>
+
+
+  <div class="warn f-warn"><b>It treats your plan as a hypothesis</b>, not a proposal to approve. If you want
+  agreement rather than pressure, this is the wrong command.</div>
+</article>
+
+<!-- =================== /scrutinize =================== -->
+<article class="entry" id="scrutinize">
+  <h3>/scrutinize</h3>
+  <p class="lede f-lede">Independent adversarial critique of anything you've settled on — a plan, a product, a project, a claim, a document.</p>
+
+  <dl class="ex f-forms">
+    <dt>/scrutinize</dt><dd>Default critique.</dd>
+    <dt>--lens premortem</dt><dd>Assume it already failed, then work backwards to why.</dd>
+    <dt>--lens devils-advocate</dt><dd>Argue the opposing case as strongly as possible.</dd>
+    <dt>--lens multi-lens</dt><dd>Several stakeholder angles at once.</dd>
+    <dt>--depth rough | general | specific | implementation</dt><dd>How deep findings are allowed to go.</dd>
+  </dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">The critic is blind on purpose</h4>
+      <p>It never sees the conversation that produced the thing, so it cannot be talked into agreeing
+      and it has no sunk cost in the idea. That blindness is the whole mechanism.</p>
+      <h4 class="f-when" style="margin-top:11px">Verdicts</h4>
+      <p><b>PROCEED</b> · <b>PROCEED-WITH-FIXES</b> · <b>REWORK</b>, with findings split into blocking
+      and advisory. With-fixes is the normal resting result, not a failure.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">The depth ladder</h4>
+      <p>Cumulative. Declaring <code>rough</code> means implementation-level nitpicks are out of
+      scope, which is what makes a clean PROCEED reachable at an early stage instead of an infinite
+      critique loop.</p>
+      <p>Adding <b>scope</b> to a plan invalidates a previous verdict at that depth. Adding
+      <b>detail</b> does not.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">Not for</h4>
+      <p>Hunting bugs in written code. This operates at the level of reasoning and direction.</p>
+      <h4 class="f-know" style="margin-top:11px">Budget it</h4>
+      <p>One to three passes is normal. Past round three, stop and decide rather than looping — an
+      endless critique cycle is a way of not shipping.</p>
+    </div>
+  </div>
+</article>
+
+<!-- =================== /change-review =================== -->
+<article class="entry" id="change-review">
+  <h3>/change-review <span class="tag">always on</span></h3>
+  <p class="lede f-lede">The standing format for how Claude shows you code edits. There is nothing to run.</p>
+
+  <dl class="ex f-forms"><dt>—</dt><dd><b>Takes no arguments; it is not invoked.</b> A standing format, always in effect.</dd></dl>
+
+  <div class="cols">
+    <div class="block">
+      <h4 class="f-what">What you get</h4>
+      <p>A summary map first — one line per file, what changed and why — then per-file diffs with
+      enough surrounding context to judge them. Small changes shown whole; large ones show the first
+      significant hunk and offer the rest.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-when">Why it is a skill</h4>
+      <p>So the format is consistent and so subagents produce it directly rather than needing a second
+      pass to reformat. It applies whether or not you think about it.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-not">If you see it in a list</h4>
+      <p>It looks like a command and isn't. Typing it does nothing useful. It is listed only so you
+      know why edits arrive looking the way they do.</p>
+    </div>
+    <div class="block">
+      <h4 class="f-know">Worth knowing</h4>
+      <p>Subagents are told to produce this format directly, so a delegated edit comes back reviewable without a second pass.</p>
+    </div>
+
+  </div>
+</article>
+
+<p class="stamp"><a href="index.html">&larr; back to the cheatsheet</a></p>
+
+<p class="vstamp">Claude Kit v0.1.10 &middot; 19 commands &middot; open these files any time, no session required</p>
+
+</body>
+</html>
