@@ -116,6 +116,10 @@ point, not a flaw to smooth over.
 
 - It keys on the `description` field. A behaviour change that leaves the description untouched will
   **not** trip it. Treat it as a floor, not a guarantee.
+- It stamps `$ShipSkills` only, **not `$ShipCommands`** — so `/theme` is unguarded, because a
+  `commands/*.md` file has no `description` frontmatter to hash. That is why the report says "18
+  commands stamped" while `Assert-GuideCoverage` counts 19. Changing `/theme`'s behaviour means
+  re-reading its guide entry by hand.
 - It cannot judge prose quality, only that a re-read was prompted.
 - Topic blocks (`div.entry`) are unstamped, since they map to no command. `ambient.html` and
   `stores.html` need manual attention when the ambient layer changes.

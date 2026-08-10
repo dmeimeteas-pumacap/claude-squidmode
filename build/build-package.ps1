@@ -413,9 +413,12 @@ function Assert-GuideCurrency {
   }
   $gone = @($old.Keys | Where-Object { -not $now.Contains($_) })
 
-  if ($AcceptGuideDrift -or -not (Test-Path $stampPath)) {
+  # Capture existence BEFORE writing: testing after Write-NoBom always reports the file present, so
+  # the very first (seeding) run mislabelled itself "re-stamped".
+  $existed = Test-Path $stampPath
+  if ($AcceptGuideDrift -or -not $existed) {
     Write-NoBom $stampPath (($now | ConvertTo-Json -Depth 3))
-    $what = if (Test-Path $stampPath) { "re-stamped" } else { "seeded" }
+    $what = if ($existed) { "re-stamped" } else { "seeded" }
     $Report.Add("Assert-GuideCurrency: $what $($now.Count) command(s)$(if ($drifted.Count) { " (accepted drift: $($drifted -join ', '))" })")
     return
   }
