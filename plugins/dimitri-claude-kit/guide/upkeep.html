@@ -59,12 +59,13 @@
 <!-- =================== /reconcile =================== -->
 <article class="entry" id="reconcile">
   <h3>/reconcile</h3>
-  <p class="lede f-lede">Make the stores match what actually happened. Two lanes.</p>
+  <p class="lede f-lede">Make your information accurate to current state across the board. Three lanes.</p>
 
   <dl class="ex f-forms">
     <dt>/reconcile</dt><dd>Asks which lane you want.</dd>
     <dt>/reconcile sync</dt><dd>Detector-driven: find drift, then fix it.</dd>
     <dt>/reconcile status</dt><dd>Interactive walk-through: tick what you really did, route what never got captured.</dd>
+    <dt>/reconcile this</dt><dd>Send a short message to another one of your chats.</dd>
   </dl>
 
   <div class="cols">
@@ -82,6 +83,18 @@
       got captured anywhere, then recap. It reads the <code>/eod</code> digest as its prep sheet rather
       than re-scanning raw transcripts — so if no digest exists it will ask you to type
       <code>/eod</code> first, and will say plainly if you skip it.</p>
+    </div>
+    <div class="block">
+      <h4>The message lane</h4>
+      <p><code>/reconcile this</code> sends a short text message to another one of your own
+      conversations — for when something you just did changes what a different chat should believe,
+      but is not worth a thread entry. It works out which chat you mean and asks you to confirm,
+      never guesses silently, and refuses to send to the chat you are already in.</p>
+      <p><b>Delivered once, then gone.</b> The message lands on that conversation's next prompt as a
+      <a href="ambient.html#inbox-message"><code>[message]</code></a> line and is deleted as it is
+      handed over. Nothing is stored and nothing accumulates, so it expires by itself after four
+      hours if that chat is never prompted. You are told it was queued, never that it arrived —
+      there is no delivery receipt, by design.</p>
     </div>
     <div class="block">
       <h4 class="f-know">It sweeps your other conversations</h4>
