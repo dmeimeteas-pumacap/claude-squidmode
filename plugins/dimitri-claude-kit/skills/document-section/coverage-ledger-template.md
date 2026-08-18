@@ -7,14 +7,16 @@ Do not edit the table manually — `document-section` owns it. Notes and comment
 
 | Project | Category | Tier | Mode | Status | Doc path | Source path | Open Qs (H/L/R) | Last run |
 |---|---|---|---|---|---|---|---|---|
-| _example: Squid.AzFn.TradeSvc_ | AzFn | Brief | create | done | `Documentation/sections/AzFn/TradeSvc.md` | `Squid.AzFn.TradeSvc` | 0/1/2 | 2025-01-15 |
+| _example: ExampleProject_ | Function | Brief | create | done | `Documentation/sections/Functions/ExampleProject.md` | `src/ExampleProject` | 0/1/2 | 2025-01-15 |
 
 ### Category values
-- `WinSvc` — `Squid.WinSvc.*` Windows/Docker services
-- `AzFn` — `Squid.AzFn.*` Azure Functions
-- `CoreLib` — core `Squid.*` libraries
-- `Tests` — `*.Tests` projects
-- `Other` — legacy or non-`Squid.*` projects
+Abstract buckets. Label each row with the repo's own family name where it has one (discovered in
+Phase A), and map it to the bucket it belongs to.
+- `Service` — long-running services: daemons, hosted workers, containers
+- `Function` — serverless or trigger-driven function projects
+- `Library` — shared first-party libraries
+- `Tests` — test projects
+- `Other` — legacy, uncategorized, or special-case projects
 
 ### Mode values
 - `create` — no README existed at run start; full Create mode run

@@ -1,5 +1,5 @@
 ---
-description: "Document a defined SECTION of the codebase — a set of projects, a category (e.g. all Squid.AzFn.* services), a directory, or the whole codebase — by orchestrating the document-process skill across each target. Use when the user asks to document multiple projects, a group/category of services, a folder, or everything at once. NOT for a single project (use document-process) and NOT for the unified system overview (use document-overall)."
+description: "Document a defined SECTION of the codebase — a set of projects, a category (e.g. every serverless/trigger function project), a directory, or the whole codebase — by orchestrating the document-process skill across each target. Use when the user asks to document multiple projects, a group/category of services, a folder, or everything at once. NOT for a single project (use document-process) and NOT for the unified system overview (use document-overall)."
 ---
 
 # Document Section Skill
@@ -35,7 +35,7 @@ gap** — and add three orchestration-level rules:
 ## When to invoke
 
 Trigger when the user says something like:
-- "document all the `Squid.AzFn.*` services" / "document every Windows service"
+- "document all the trigger-function services" / "document every long-running service"
 - "document these projects: A, B, C"
 - "document everything under `<directory>`"
 - "document the whole codebase" / "document everything"
@@ -47,7 +47,9 @@ Do **not** trigger for:
 ## Inputs you need
 
 1. **Section spec** — how the slice is defined. Accept any of: an explicit project list; a category
-   (`Squid.WinSvc.*`, `Squid.AzFn.*`, core `Squid.*`, `*.Tests`); a directory; a glob; or "all".
+   named in the repo's own naming convention (a long-running-service family, a trigger-function
+   family, the shared-library family, test projects); a directory; a glob; or "all". Resolve
+   category names against the conventions discovered in Phase A rather than any assumed prefix set.
 2. **Exclusions (optional)** — only if the user names them. Default is to document everything in
    the resolved section (see Phase A).
 3. **Domain context** — gathered via the batched checkpoint (Phase D), not up front.
@@ -56,11 +58,12 @@ Do **not** trigger for:
 
 - A documentation file per target at **`Documentation/sections/<SectionName>/<ProjectName>.md`** (produced by
   `document-process` at the assigned depth tier). **Match the repo's existing documentation root** if
-  one exists — in this repo that is `Documentation/sections/` (the prior AzFn run wrote `Documentation/sections/AzFn/`),
-  NOT a fresh `docs/` tree. Never write per-target files inside the project directories themselves;
+  one exists — look for an established documentation tree and write into it rather than starting a
+  fresh `docs/` tree. Never write per-target files inside the project directories themselves;
   they all land under the single central documentation root. The section name is derived from the
-  section spec (e.g., `AzFn`, `WinSvc`, `CoreLib`). The project name drops the common prefix (e.g.,
-  `ContraParserSvc`, not `Squid.AzFn.ContraParserSvc`).
+  section spec (e.g., `Services`, `Functions`, `Libraries`, or whatever the repo's own family names
+  are). The project name drops the family's common prefix, so a project named
+  `<Prefix>.<Family>.OrderRouter` is documented as `OrderRouter.md`.
 - A **coverage ledger** at `.claude/coverage/documentation-coverage.md`, updated with depth tier
   per target row. Open question counts use three columns: `H/L/R` (human-high, human-low,
   ref-blocked).
@@ -81,16 +84,26 @@ These are orchestration **Phases** (A–E), distinct from the per-target **Passe
 ### Phase A — Resolve the target set
 Interpret the section spec and produce a concrete list of targets:
 - For project-based specs, **use the filesystem as the primary source**: find all directories
-  matching the section spec that contain a `.csproj`. Use `AS/SquidAll.sln` as a supplementary
+  matching the section spec that contain a project file (`.csproj`, or the language's equivalent
+  manifest). Use the repo's main solution or workspace file, if one exists, as a supplementary
   index (relative paths, quick categorization) but not as a gate — a project that exists on disk
   is in scope whether or not it is registered in the main solution. Test projects in particular
   are often registered only in sub-solution files and must not be silently dropped; they are a
   primary documentation source (usage patterns, edge cases, invariants).
-- Categorize each by naming convention: `Squid.WinSvc.*` (services), `Squid.AzFn.*` (functions),
-  core `Squid.*` (libraries), `*.Tests` (tests), and anything else (legacy/special).
-- **Include everything in the resolved section by default** — tests and non-`Squid.*` legacy
-  included. Exclude a category **only** when the user explicitly asks.
-- **Report the resolved list + count, and note any user-requested exclusions, before heavy work.**
+- **Discover the repo's own naming conventions before categorizing anything.** List the project
+  files across the repo and observe which prefix and suffix families actually occur, how many
+  projects sit under each, and what those projects look like. Never assume a prefix set; derive it
+  from what is on disk. Record the discovered families so the rest of the run uses the repo's own
+  vocabulary.
+- Categorize each target by mapping the discovered families onto these abstract categories:
+  long-running services (daemons, hosted workers, containers), serverless or trigger-driven
+  functions, shared libraries, test projects, and anything else (legacy/special). Where a family is
+  ambiguous or the repo has no strong convention, categorize from the project file itself (SDK,
+  output type, entry point, host/framework references) rather than the name.
+- **Include everything in the resolved section by default** — tests and uncategorized legacy
+  projects included. Exclude a category **only** when the user explicitly asks.
+- **Report the discovered conventions, the resolved list + count, and any user-requested exclusions,
+  before heavy work.**
   This is a cheap scope confirmation, not the domain checkpoint.
 
 ### Phase A.5 — Design checkpoint (large or first-time sections)
@@ -104,9 +117,10 @@ If either is true, offer: "Before I start, want me to run `/grill-me` on the app
 ### Phase B.0 — Load system overview context (if available)
 
 Before initializing the ledger, check whether `Documentation/system-overview.md` exists. If it
-does, read it once and extract the sections relevant to the service category being documented
-(e.g., Architecture Shape > Service Types > WinSvc paragraph for a WinSvc batch, AzFn entries for
-an AzFn batch, Kraken4 Relationship for any CoreLib batch). Store this as a single excerpt string.
+does, read it once and extract the sections relevant to the category being documented (e.g., the
+Architecture Shape > Service Types paragraph covering that category, plus any section describing
+how that category relates to a critical or externally-facing downstream system). Store this as a
+single excerpt string.
 
 Pass this excerpt to every `document-process` subagent in Phase C as **system overview context**.
 This avoids each subagent independently loading the full file and ensures consistent framing across
@@ -114,8 +128,9 @@ the batch. If the file does not exist, skip silently — the excerpt is optional
 requirement.
 
 ### Phase B — Prioritize + initialize the ledger
-- **Default order:** services (`Squid.WinSvc.*`, `Squid.AzFn.*`) and public / Kraken4-facing core
-  libraries first; leaf libraries and `*.Tests` last. Highest-traffic, highest-pain first.
+- **Default order:** long-running services and trigger functions first, then shared libraries with a
+  public API surface or exposure to a critical/externally-facing downstream system; leaf libraries
+  and test projects last. Highest-traffic, highest-pain first.
 - Create or update the coverage ledger. For each target record: category, **depth tier** (from
   Phase B.5), **mode** (create if no doc exists, update if one does), status = `pending`, and
   placeholders for open-question counts.
@@ -125,21 +140,24 @@ requirement.
 ### Phase B.5 — Classify depth tier per target
 Before dispatching, assess each target's complexity and assign a depth tier. This controls how much
 `document-process` produces and which passes it runs. The classification is intentionally lightweight
-— read only the `.csproj` and file list, not source:
+— read only the project file and file list, not source:
 
-- **Brief**: a genuine trigger-wrapper or throwaway — ≤2 source `.cs` files, no Kraken4
-  `ProjectReference`, AND **no substantial first-party `Squid.*` service library behind it**. Most
-  `Squid.AzFn.*` trigger wrappers qualify. A scratch/experiment project qualifies.
-- **Standard**: 3–10 source files, real logic but bounded scope, limited or no Kraken4 exposure.
-- **Detailed**: Kraken4-facing API surface (e.g. a NetMQ/WCF request-response server), complex state
-  machine, high operational risk, or >10 source files with non-obvious interactions.
+- **Brief**: a genuine trigger-wrapper or throwaway — ≤2 source files, no `ProjectReference` reaching
+  a critical or externally-facing downstream system, AND **no substantial first-party service library
+  behind it**. Most trigger wrappers qualify. A scratch/experiment project qualifies.
+- **Standard**: 3–10 source files, real logic but bounded scope, limited or no exposure to a critical
+  or externally-facing downstream system.
+- **Detailed**: an API surface facing a critical or externally-facing downstream system (e.g. a
+  request-response server over a messaging or RPC transport), complex state machine, high operational
+  risk, or >10 source files with non-obvious interactions.
 
-**Thin-host caveat (do not tier on local file count alone).** A `Squid.WinSvc.*` host is typically a
-2-file `Program.cs`+`Worker.cs` shell that delegates all logic to a referenced first-party library
-(e.g. `Squid.MarketDataSvc`). File count would wrongly mark it Brief. For any host that delegates to a
-substantial `Squid.*` service library, **inspect that library's `.csproj`/role** and tier on IT:
-Standard minimum for a production host; Detailed if the library exposes a NetMQ/WCF server surface or
-reaches Kraken4. Never assign Brief to a live production host just because its own directory is thin.
+**Thin-host caveat (do not tier on local file count alone).** A host project is often a two-file
+entry-point-plus-worker shell that delegates all logic to a referenced first-party library. File
+count would wrongly mark it Brief. For any host that delegates to a substantial first-party library,
+**inspect that library's project file and role** and tier on IT: Standard minimum for a production
+host; Detailed if the library exposes a request-response server surface or reaches a critical or
+externally-facing downstream system. Never assign Brief to a live production host just because its
+own directory is thin.
 
 When borderline, go one tier higher — easier to trim than to discover a gap later. Record the tier
 in the ledger.
@@ -286,8 +304,8 @@ list them so the user knows which future section runs will trigger further backf
 - **Format:** see the bundled `coverage-ledger-template.md`. Per-target row:
   `Project | Category | Tier | Mode | Status | Doc path | Open Qs (H/L/R) | Last run`.
   H = human-high, L = human-low, R = ref-blocked (pending backfill).
-- The ledger is the source of truth for resumability and progress visibility across the ~300
-  projects.
+- The ledger is the source of truth for resumability and progress visibility across every project
+  in the repo.
 
 ## Pitfalls
 - **Don't reimplement documentation logic here.** If you find yourself reading a target's source to

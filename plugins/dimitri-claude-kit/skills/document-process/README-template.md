@@ -10,7 +10,7 @@
 # <ProjectName>
 
 ## What it is
-<!-- 1–3 sentences: what this does and where the real logic lives (e.g. "thin host over Squid.X").
+<!-- 1–3 sentences: what this does and where the real logic lives (e.g. "thin host over <core library>").
      Fold any name-decoding (source system / cadence / acronym) in as a clause, not its own section. -->
 
 ## How it works

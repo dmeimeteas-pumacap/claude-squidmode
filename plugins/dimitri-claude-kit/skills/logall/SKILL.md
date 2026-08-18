@@ -41,7 +41,7 @@ in its thread, and a fresh, copy-ready EOD summary is on screen.
 **This is the load-bearing design rule.** A candidate and its logged/reviewed state are keyed by
 the **session UUID** (the JSONL filename without extension), never by `(project, date)`. The old
 `(project, date)` key was the source of a silent data-loss bug: you run many concurrent threads per
-project (TheSquid routinely has 5-7 active threads), so a single logged entry in one thread marked
+project (a busy project routinely has 5-7 active threads), so a single logged entry in one thread marked
 the whole `(project, date)` day as "logged" and every sibling thread's session that day was
 subtracted as already-covered and never surfaced. Session-UUID keying makes sibling threads
 impossible to mask — each session must be handled on its own before it drops off the list.
@@ -73,8 +73,8 @@ find "$PROJECTS_DIR" -mindepth 2 -maxdepth 2 -name "*.jsonl" ! -name "agent-*" \
 
 Each JSONL file is ONE candidate session, identified by its filename stem (the session UUID).
 Decode the parent folder name to a `project_name` exactly as before: strip the `PROJECTS_DIR`
-prefix; the project is the last meaningful segment of the `-`-decoded path (`C--Users-foo-source-repos-TheSquid`
-→ `TheSquid`); folders ending in only system dirs (`source-repos`, `repos`) → `general`. Carry
+prefix; the project is the last meaningful segment of the `-`-decoded path (`C--Users-foo-source-repos-MyProject`
+→ `MyProject`); folders ending in only system dirs (`source-repos`, `repos`) → `general`. Carry
 `(session_id, project_name, date, path)` for each candidate. Do **not** group by `(project, date)`.
 
 ### Step 0 (first run only) — migrate legacy coverage into the processed ledger

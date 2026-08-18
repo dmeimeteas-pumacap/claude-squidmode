@@ -31,8 +31,8 @@ human-readable mirror -- keep them in sync.
 QUICKSTART.md, GUIDE.md, INSTALL.md, LITE.md, README.md (author-facing)
 
 ## EXCLUDED skills (deliberately NOT shipped in v1)
-- maystreet-pull -- TheSquid/BLPAPI/MayStreet-specific
-- test-safety-audit -- coupled to a TheSquid ledger path
+- maystreet-pull -- vendor-and-employer-specific data pull
+- test-safety-audit -- coupled to an employer-specific ledger path
 - (reconcile + deepclean shipped in v0.1.6.1 with the janitor engine.
   update-statuses/current/task-tracker no longer exist -- folded 2026-07-31.)
 - document-overall -- the system-overview skill is inherently tuned to YOUR system (hardcodes specific
